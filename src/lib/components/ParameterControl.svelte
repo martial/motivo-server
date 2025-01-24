@@ -15,7 +15,7 @@
   function handleInput(event) {
     let newValue;
     if (type === 'select') {
-      newValue = event.target.value === '' ? null : parseInt(event.target.value);
+      newValue = event.target.value === '' ? null : event.target.value;
     } else if (type === 'range') {
       newValue = parseFloat(event.target.value);
       // Update the bound value immediately for range inputs

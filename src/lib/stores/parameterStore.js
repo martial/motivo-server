@@ -1,4 +1,5 @@
 import { writable } from "svelte/store";
+import { websocketService } from "../services/websocketService";
 
 const DEFAULT_PARAMETERS = {
   gravity: -9.81,
@@ -13,39 +14,10 @@ const DEFAULT_PARAMETERS = {
 
 function createParameterStore() {
   const { subscribe, set: internalSet, update } = writable(DEFAULT_PARAMETERS);
-  let socket;
-
-  function setSocket(ws) {
-    console.log("Setting parameter socket");
-    socket = ws;
-
-    // Handle incoming messages
-    socket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === "parameters") {
-          // Update store with received parameters
-          internalSet(data.parameters);
-        }
-      } catch (error) {
-        console.error("Error handling WebSocket message:", error);
-      }
-    };
-
-    // Request current parameters when socket is set
-    if (socket?.readyState === WebSocket.OPEN) {
-      socket.send(
-        JSON.stringify({
-          type: "get_parameters",
-          timestamp: new Date().toISOString(),
-        })
-      );
-    }
-  }
 
   function sendParameters(params) {
+    const socket = websocketService.getSocket();
     if (socket?.readyState === WebSocket.OPEN) {
-      console.log("Sending parameters:", params);
       socket.send(
         JSON.stringify({
           type: "update_parameters",
@@ -60,27 +32,16 @@ function createParameterStore() {
 
   return {
     subscribe,
-    setSocket,
     updateParameter: (key, value) => {
       update((params) => {
         const newParams = { ...params, [key]: value };
-        console.log(params);
-
-        console.log(`Updating parameter ${key} to ${value}`);
         sendParameters(newParams);
         return newParams;
       });
     },
     reset: () => {
-      console.log("Resetting parameters to default");
       internalSet(DEFAULT_PARAMETERS);
       sendParameters(DEFAULT_PARAMETERS);
-    },
-    disconnect: () => {
-      if (socket) {
-        socket.close();
-        socket = null;
-      }
     },
   };
 }

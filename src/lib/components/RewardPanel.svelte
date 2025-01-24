@@ -1,5 +1,6 @@
 <script>
   import { rewardStore, REWARD_TYPES, COMBINATION_TYPES } from '../stores/rewardStore';
+  import { favoriteStore } from '../stores/favoriteStore';
   import ParameterControl from './ParameterControl.svelte';
   import ParameterGroup from './ParameterGroup.svelte';
 
@@ -35,50 +36,59 @@
     displayWeights = $rewardStore.weights.map(w => Number(w) || 0);
   }
 
+  // Remove the local favorites variable and use the store directly
+  $: favorites = $favoriteStore;
+
+  // Update save favorite function
+  function saveAsFavorite() {
+    const name = prompt('Enter a name for this favorite:');
+    if (name) {
+      const favoriteData = {
+        activeRewards: $rewardStore.activeRewards.map(reward => ({
+          ...reward,
+          weight: $rewardStore.weights[$rewardStore.activeRewards.indexOf(reward)]
+        })),
+        combinationType: $rewardStore.combinationType
+      };
+      favoriteStore.saveFavorite(name, favoriteData);
+    }
+  }
+
+  // Update delete favorite function
+  function deleteFavorite(name, event) {
+    event.stopPropagation();
+    if (confirm(`Delete favorite "${name}"?`)) {
+      favoriteStore.deleteFavorite(name);
+    }
+  }
+
   function initializeParameters(rewardType) {
-    console.log('=== Initializing Parameters ===');
-    console.log('Reward Type:', rewardType);
-    // Initialize all parameters from REWARD_TYPES
     const params = {};
     Object.entries(REWARD_TYPES[rewardType]).forEach(([key, config]) => {
       params[key] = config.default;
-      console.log(`Setting ${key} to default:`, config.default);
     });
-    console.log('Initialized params:', params);
     return params;
   }
 
   $: {
-    console.log('=== Reactive Update ===');
-    console.log('Selected reward type changed to:', selectedRewardType);
     if (previousRewardType !== selectedRewardType) {
-      console.log('Reward type changed, initializing new parameters');
       activeParameters = initializeParameters(selectedRewardType);
       previousRewardType = selectedRewardType;
-    } else {
-      console.log('Same reward type, keeping current parameters');
     }
   }
 
   function handleParameterChange(param, value) {
-    console.log('=== Parameter Change ===');
-    console.log(`Changing ${param} from ${activeParameters[param]} to ${value}`);
-    // Create a new object with all existing parameters plus the updated one
     activeParameters = {
-      ...activeParameters,  // Keep all existing parameters
-      [param]: value       // Update the changed parameter
+      ...activeParameters,
+      [param]: value
     };
-    console.log('Updated activeParameters:', activeParameters);
   }
 
   function addReward() {
-    console.log('=== Adding Reward ===');
-    console.log('Current activeParameters:', activeParameters);
     const rewardParams = {
       name: selectedRewardType,
-      ...activeParameters  // Spread all parameters
+      ...activeParameters
     };
-    console.log('Final reward params to be sent:', rewardParams);
     rewardStore.addReward(selectedRewardType, rewardParams);
   }
 
@@ -118,58 +128,8 @@
 
 <div class="w-96 py-4">
   <div class="bg-white rounded-lg shadow-lg p-4">
-    <h1 class="text-lg font-bold mb-4 text-gray-800">Reward Controls</h1>
+    <h1 class="text-lg font-bold mb-4 text-gray-800">Add Reward</h1>
     
-    <!-- Active Rewards -->
-    {#if $rewardStore.activeRewards.length > 0}
-      <div class="mb-4">
-        <h2 class="text-sm font-semibold mb-2">Active Rewards</h2>
-        {#each $rewardStore.activeRewards as reward, i}
-          <div class="flex items-center gap-2 mb-2 bg-gray-50 p-2 rounded">
-            <div class="flex-grow">
-              <div class="text-sm font-medium">{reward.name}</div>
-              <div class="text-xs text-gray-500">
-                Weight: 
-                <input 
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  value={displayWeights[i]}
-                  on:input={(e) => handleWeightChange(i, parseFloat(e.target.value))}
-                  class="w-24 inline-block"
-                />
-                {(displayWeights[i] * 100).toFixed(0)}%
-              </div>
-            </div>
-            <button
-              on:click={() => rewardStore.removeReward(i)}
-              class="text-red-500 hover:text-red-700"
-            >
-              ×
-            </button>
-          </div>
-        {/each}
-
-        <select
-          bind:value={$rewardStore.combinationType}
-          class="mt-2 block w-full text-sm rounded-md border-0 py-2 pl-3 pr-12 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-blue-600 bg-white shadow-sm appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[position:right_0.5rem_center] bg-[length:1.5em_1.5em] bg-no-repeat"
-        >
-          {#each COMBINATION_TYPES as type}
-            <option value={type}>{type}</option>
-          {/each}
-        </select>
-
-        <button
-          on:click={() => rewardStore.cleanRewards()}
-          class="mt-2 w-full bg-red-600 text-white px-3 py-1 text-sm rounded hover:bg-red-700"
-        >
-          Clear All Rewards
-        </button>
-      </div>
-    {/if}
-
-    <!-- Add New Reward -->
     <div class="space-y-3">
       <!-- Group Selection -->
       <select
@@ -202,16 +162,45 @@
             step={config.step}
             options={config.options?.map(opt => ({ value: opt, label: opt }))}
             value={activeParameters[param]}
-            on:change={({ detail }) => {
-              console.log(`=== ParameterControl Change Event ===`);
-              console.log(`Parameter: ${detail.name}`);
-              console.log(`Old value:`, activeParameters[param]);
-              console.log(`New value:`, detail.value);
-              handleParameterChange(detail.name, detail.value);
-            }}
+            on:change={({ detail }) => handleParameterChange(detail.name, detail.value)}
           />
         {/each}
       </ParameterGroup>
+
+      <div class="mt-2">
+        <div class="flex justify-between items-center mb-2">
+          <h3 class="text-sm font-semibold">Favorites</h3>
+          <button
+            on:click={saveAsFavorite}
+            class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded"
+          >
+            Save Current
+          </button>
+        </div>
+        <!--
+        {#if Object.keys(favorites).length > 0}
+          <div class="space-y-1 max-h-32 overflow-y-auto">
+            {#each Object.entries(favorites) as [name, _]}
+              <div
+                class="flex items-center justify-between bg-gray-50 px-2 py-1 rounded text-sm cursor-pointer hover:bg-gray-100"
+                on:click={() => favoriteStore.loadFavorite(name)}
+              >
+                <span>{name}</span>
+                <button
+                  class="text-red-500 hover:text-red-700"
+                  on:click={(e) => deleteFavorite(name, e)}
+                >
+                  ×
+                </button>
+              </div>
+            {/each}
+          </div>
+        {:else}
+          <div class="text-sm text-gray-500 italic">No favorites saved</div>
+        {/if}
+    -->
+      </div>
+     
 
       <button
         on:click={addReward}

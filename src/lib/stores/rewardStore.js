@@ -1,4 +1,5 @@
 import { writable } from "svelte/store";
+import { websocketService } from "../services/websocketService";
 
 // Define reward types and their parameters
 export const REWARD_TYPES = {
@@ -149,15 +150,8 @@ function createRewardStore() {
     combinationType: "multiplicative",
   });
 
-  let socket;
-
-  function setSocket(ws) {
-    console.log("try set socket");
-    socket = ws;
-  }
-
   function sendRewardRequest(rewards, weights, combinationType) {
-    console.log("try reward request");
+    const socket = websocketService.getSocket();
     if (socket?.readyState === WebSocket.OPEN) {
       const rewardRequest = {
         type: "request_reward",
@@ -174,6 +168,7 @@ function createRewardStore() {
   }
 
   function cleanRewards() {
+    const socket = websocketService.getSocket();
     if (socket?.readyState === WebSocket.OPEN) {
       socket.send(
         JSON.stringify({
@@ -187,79 +182,80 @@ function createRewardStore() {
 
   return {
     subscribe,
-    setSocket,
-    addReward: (rewardType, parameters) => {
+    update: (newState) => {
+      set(newState);
+      sendRewardRequest(
+        newState.activeRewards,
+        newState.weights,
+        newState.combinationType
+      );
+    },
+    addReward: (name, params, weight = 1) => {
       update((state) => {
-        const newRewards = [
-          ...state.activeRewards,
-          {
-            name: rewardType,
-            ...parameters,
-          },
-        ];
-        const newWeights = [...state.weights, 1.0];
-
-        // Normalize weights
-        const weightSum = newWeights.reduce((a, b) => a + b, 0);
-        const normalizedWeights = newWeights.map((w) => w / weightSum);
-
-        sendRewardRequest(newRewards, normalizedWeights, state.combinationType);
-
-        return {
+        const newState = {
           ...state,
-          activeRewards: newRewards,
-          weights: normalizedWeights,
+          activeRewards: [...state.activeRewards, params],
+          weights: [...state.weights, weight],
         };
+        sendRewardRequest(
+          newState.activeRewards,
+          newState.weights,
+          newState.combinationType
+        );
+        return newState;
       });
     },
     removeReward: (index) => {
       update((state) => {
-        const newRewards = state.activeRewards.filter((_, i) => i !== index);
-        const newWeights = state.weights.filter((_, i) => i !== index);
-
-        // Normalize remaining weights
-        const weightSum = newWeights.reduce((a, b) => a + b, 0);
-        const normalizedWeights = weightSum
-          ? newWeights.map((w) => w / weightSum)
-          : [];
-
-        sendRewardRequest(newRewards, normalizedWeights, state.combinationType);
-
-        return {
+        const newState = {
           ...state,
-          activeRewards: newRewards,
-          weights: normalizedWeights,
+          activeRewards: state.activeRewards.filter((_, i) => i !== index),
+          weights: state.weights.filter((_, i) => i !== index),
         };
+        sendRewardRequest(
+          newState.activeRewards,
+          newState.weights,
+          newState.combinationType
+        );
+        return newState;
       });
     },
     updateWeight: (index, weight) => {
       update((state) => {
-        const newWeights = [...state.weights];
-        newWeights[index] = weight;
-
-        // Normalize weights
-        const weightSum = newWeights.reduce((a, b) => a + b, 0);
-        const normalizedWeights = newWeights.map((w) => w / weightSum);
-
-        sendRewardRequest(
-          state.activeRewards,
-          normalizedWeights,
-          state.combinationType
-        );
-
-        return {
+        const newState = {
           ...state,
-          weights: normalizedWeights,
+          weights: state.weights.map((w, i) => (i === index ? weight : w)),
         };
+        sendRewardRequest(
+          newState.activeRewards,
+          newState.weights,
+          newState.combinationType
+        );
+        return newState;
       });
+    },
+    cleanRewards: () => {
+      update((state) => ({
+        ...state,
+        activeRewards: [],
+        weights: [],
+      }));
+      cleanRewards();
     },
     setCombinationType: (type) => {
       update((state) => {
-        sendRewardRequest(state.activeRewards, state.weights, type);
-        return { ...state, combinationType: type };
+        const newState = {
+          ...state,
+          combinationType: type,
+        };
+        sendRewardRequest(
+          newState.activeRewards,
+          newState.weights,
+          newState.combinationType
+        );
+        return newState;
       });
     },
-    cleanRewards,
   };
 }
 

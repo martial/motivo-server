@@ -8,8 +8,9 @@ class WebSocketService {
     WebSocketService.instance = this;
 
     this.socket = null;
-    this.isReady = writable(false);
+    this.isReady = false;
     this.wsUrl = import.meta.env.VITE_WS_URL;
+    this.readyStateListeners = new Set();
   }
 
   connect() {
@@ -21,9 +22,8 @@ class WebSocketService {
 
     this.socket.onopen = () => {
       console.log("WebSocket connected");
-      this.isReady.set(true);
-      // Notify stores
-      this.notifyStores();
+      this.isReady = true;
+      this.notifyReadyStateListeners();
     };
 
     this.socket.onmessage = (event) => {
@@ -37,12 +37,14 @@ class WebSocketService {
 
     this.socket.onclose = () => {
       console.log("WebSocket disconnected");
-      this.isReady.set(false);
+      this.isReady = false;
+      this.notifyReadyStateListeners();
     };
 
     this.socket.onerror = (error) => {
       console.error("WebSocket error:", error);
-      this.isReady.set(false);
+      this.isReady = false;
+      this.notifyReadyStateListeners();
     };
   }
 
@@ -52,7 +54,7 @@ class WebSocketService {
       case "parameters":
       case "parameters_updated":
         import("../stores/parameterStore").then((module) => {
-          module.parameterStore.set(data.parameters);
+          //module.parameterStore.set(data.parameters);
         });
         break;
       case "recording_status":
@@ -80,6 +82,18 @@ class WebSocketService {
 
   getSocket() {
     return this.socket;
+  }
+
+  onReadyStateChange(callback) {
+    this.readyStateListeners.add(callback);
+    // Return cleanup function
+    return () => this.readyStateListeners.delete(callback);
+  }
+
+  notifyReadyStateListeners() {
+    for (const listener of this.readyStateListeners) {
+      listener(this.isReady);
+    }
   }
 }
 

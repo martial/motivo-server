@@ -1,17 +1,33 @@
 <script>
-  export let socket;
+  import { websocketService } from '../services/websocketService';
   
-  let isRecording = false;
-  let isConnected = false;
+  let isRecording = $state(false);
+  let isConnected = $state(false);
   
-  $: {
-    // Update connection status whenever socket changes
+  $effect(() => {
+    const socket = websocketService.getSocket();
     isConnected = socket?.readyState === WebSocket.OPEN;
-    console.log('Socket state:', socket?.readyState, 'Connected:', isConnected);
+    
+    if (socket) {
+      socket.addEventListener('message', handleMessage);
+      return () => socket.removeEventListener('message', handleMessage);
+    }
+  });
+
+  function handleMessage(event) {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.type === 'recording_status') {
+        isRecording = data.status === 'started';
+      }
+    } catch (error) {
+      console.error('Error parsing message:', error);
+    }
   }
 
   function toggleRecording() {
-    if (!isConnected) {
+    const socket = websocketService.getSocket();
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
       console.error('WebSocket not connected');
       return;
     }
@@ -21,24 +37,7 @@
       timestamp: new Date().toISOString()
     };
     
-    console.log('Sending recording message:', message);
     socket.send(JSON.stringify(message));
-  }
-
-  // Add message listener when socket is available
-  $: if (socket) {
-    socket.addEventListener('message', (event) => {
-      console.log('RecordButton received:', event.data);
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'recording_status') {
-          console.log('Recording status updated:', data.status);
-          isRecording = data.status === 'started';
-        }
-      } catch (error) {
-        console.error('Error parsing message:', error);
-      }
-    });
   }
 </script>
 
