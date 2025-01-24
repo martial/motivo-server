@@ -222,18 +222,34 @@ class FrameRecorder:
             all_poses = np.stack([data['poses'] for data in self.smpl_data_list])
             all_trans = np.stack([data['trans'] for data in self.smpl_data_list])
             
-            # Reshape poses to (frames, 72)
-            if len(all_poses.shape) == 3 and all_poses.shape[2] == 3:
-                all_poses = all_poses.reshape(all_poses.shape[0], -1)
-                
+            # Debug print before reshaping
+            print(f"Original poses shape: {all_poses.shape}")
+            
+            # Handle various possible pose shapes and convert to (batch, 72) format
+            if len(all_poses.shape) == 4 and all_poses.shape[2:] == (24, 3):
+                print("Case 1: Converting 4D poses (batch, 1, 24, 3) to (batch, 72)")
+                all_poses = all_poses.reshape(all_poses.shape[0], -1)  # Flatten to (batch, 72)
+            elif len(all_poses.shape) == 3 and all_poses.shape[1:] == (24, 3):
+                print("Case 2: Converting 3D poses (batch, 24, 3) to (batch, 72)")
+                all_poses = all_poses.reshape(all_poses.shape[0], 72)
+            elif len(all_poses.shape) == 2 and all_poses.shape[1] == 72:
+                print("Case 3: Poses already in correct format (batch, 72)")
+                all_poses = all_poses
+            else:
+                print(f"ERROR: Unhandled pose shape: {all_poses.shape}")
+                raise ValueError(f"Unexpected poses shape: {all_poses.shape}")
+            
+            # Debug print after reshaping
+            print(f"Final poses shape: {all_poses.shape}")
+            
             npz_data.update({
-                'smpl_poses': all_poses,
+                'smpl_poses': all_poses,  # Now in (batch, 72) format
                 'smpl_trans': all_trans
             })
             
             # Save SMPL data as pickle
             pkl_data = {
-                'smpl_poses': all_poses,
+                'smpl_poses': all_poses,  # Now in (batch, 72) format
                 'smpl_trans': all_trans
             }
             

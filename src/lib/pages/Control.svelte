@@ -6,60 +6,29 @@
     import RecordButton from '../components/RecordButton.svelte';
     import { parameterStore } from '../stores/parameterStore';
     import { rewardStore } from '../stores/rewardStore';
-  
-    let socket;
-    // get vite VITE_WS_URL
-    const wsUrl = import.meta.env.VITE_WS_URL;
-    let isSocketReady = false;
+    import { websocketService } from '../services/websocketService';
+    
+    let isSocketReady = $state(false);
+    
+    // Subscribe to websocket ready state
+    $effect(() => {
+        websocketService.isReady.subscribe(ready => {
+            isSocketReady = ready;
+        });
+    });
 
     onMount(() => {
-    
-      console.log("wsUrl", wsUrl);
-      socket = new WebSocket(wsUrl);
-      
-      socket.onopen = () => {
-        console.log('WebSocket connected');
-        isSocketReady = true;
-      };
-  
-      socket.onmessage = (event) => {
-        console.log('Control received:', event.data);
-        const data = JSON.parse(event.data);
-        // Route messages to appropriate stores based on type
-        if (data.type === "parameters" || data.type === "parameters_updated") {
-          parameterStore.set(data.parameters);
-        }
-        // Log recording status messages
-        if (data.type === "recording_status") {
-          console.log('Recording status update:', data.status);
-        }
-      };
-  
-      socket.onclose = () => {
-        console.log('WebSocket disconnected');
-        isSocketReady = false;
-      };
-  
-      socket.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        isSocketReady = false;
-      };
-  
-      // Set the socket in both stores once connected
-      parameterStore.setSocket(socket);
-      rewardStore.setSocket(socket);
+        websocketService.connect();
     });
-  
+    
     onDestroy(() => {
-      if (socket) {
         parameterStore.disconnect();
         rewardStore.disconnect();
-        socket.close();
-      }
+        websocketService.disconnect();
     });
-  </script>
+</script>
   
-  <div class="bg-gray-50 p-6 relative">
+<div class="bg-gray-50 p-6 relative">
     <!-- Live Feed - Fixed Top Right -->
     <div class="absolute top-6 right-6 w-[320px] mt-[30px]">
       <LiveFeed />
@@ -82,4 +51,4 @@
         </div>
       </div>
     </div>
-  </div>
+</div>

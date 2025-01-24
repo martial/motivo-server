@@ -293,7 +293,7 @@ async def run_simulation():
         # Update recording logic - moved after frame rendering
         if frame_recorder and frame_recorder.recording:
             try:
-                print("Recording frame...")  # Debug log
+                #print("Recording frame...")  # Debug log
                 frame_recorder.record_frame_data(
                     frame=frame.copy(),  # Make a copy of the frame
                     qpos=env.unwrapped.data.qpos.copy(),
