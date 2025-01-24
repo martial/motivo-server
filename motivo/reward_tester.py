@@ -3,6 +3,12 @@ import asyncio
 import websockets
 from typing import Dict, Any
 import traceback
+import os
+
+# import from env BACKEND_DOMAIN
+BACKEND_DOMAIN = os.getenv("VITE_BACKEND_DOMAIN", "localhost")
+WS_PORT = os.getenv("VITE_WS_PORT", 8765)
+API_PORT = os.getenv("VITE_API_PORT", 5000)
 
 async def test_individual_reward(websocket, reward_config: Dict[Any, Any], name: str, settings: Dict[Any, Any] = None):
     """Test a single reward configuration"""
@@ -57,7 +63,7 @@ async def test_individual_reward(websocket, reward_config: Dict[Any, Any], name:
 async def run_reward_tests():
     """Run a series of reward tests"""
     try:
-        uri = "ws://localhost:8765"
+        uri = f"ws://{BACKEND_DOMAIN}:{WS_PORT}"
         print(f"Connecting to {uri}...")
         
         async with websockets.connect(uri) as websocket:

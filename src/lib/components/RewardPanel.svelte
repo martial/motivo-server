@@ -27,6 +27,14 @@
   let previousRewardType = selectedRewardType;
   let activeParameters = initializeParameters(selectedRewardType);
 
+  // Initialize display weights from store and ensure they're numbers
+  let displayWeights = $rewardStore.weights.map(w => Number(w) || 0);
+
+  // Subscribe to store changes to keep display weights in sync
+  $: {
+    displayWeights = $rewardStore.weights.map(w => Number(w) || 0);
+  }
+
   function initializeParameters(rewardType) {
     console.log('=== Initializing Parameters ===');
     console.log('Reward Type:', rewardType);
@@ -80,6 +88,32 @@
       selectedRewardType = REWARD_GROUPS[selectedGroup][0];
     }
   }
+
+  // Add debounce function at the top of the script
+  function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  }
+
+  // Update the debounced version to only handle store updates
+  const debouncedUpdateWeight = debounce((index, value) => {
+    rewardStore.updateWeight(index, value);
+  }, 300);
+
+  // Update the weight handling function to ensure numeric values
+  function handleWeightChange(index, value) {
+    const numericValue = Number(value) || 0;
+    displayWeights[index] = numericValue;
+    displayWeights = [...displayWeights]; // Trigger reactivity
+    debouncedUpdateWeight(index, numericValue);
+  }
 </script>
 
 <div class="w-96 py-4">
@@ -101,11 +135,11 @@
                   min="0"
                   max="1"
                   step="0.1"
-                  value={$rewardStore.weights[i]}
-                  on:input={(e) => rewardStore.updateWeight(i, parseFloat(e.target.value))}
+                  value={displayWeights[i]}
+                  on:input={(e) => handleWeightChange(i, parseFloat(e.target.value))}
                   class="w-24 inline-block"
                 />
-                {($rewardStore.weights[i] * 100).toFixed(0)}%
+                {(displayWeights[i] * 100).toFixed(0)}%
               </div>
             </div>
             <button

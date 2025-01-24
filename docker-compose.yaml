@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  backend:
+    image: yassinsiouda/motivo-server-back:latest
+    build: 
+      context: .
+      dockerfile: Dockerfile.back
+    ports:
+      - "5002:5002"
+      - "8765:8765"
+    env_file:
+      - .env
+    volumes:
+      - ./metamotivo-S-1-datasets:/app/metamotivo-S-1-datasets
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    restart: unless-stopped
+
+  frontend:
+    image: yassinsiouda/motivo-client-front:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.front
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+    depends_on:
+      - backend
+    env_file:
+      - .env
+    restart: unless-stopped
+

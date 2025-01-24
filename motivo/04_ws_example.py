@@ -19,6 +19,11 @@ from typing import Dict, Any
 from frame_utils import FrameRecorder  # Update import to use existing file
 
 
+# import from env BACKEND_DOMAIN
+BACKEND_DOMAIN = os.getenv("VITE_BACKEND_DOMAIN", "localhost")
+WS_PORT = os.getenv("VITE_WS_PORT", 8765)
+API_PORT = os.getenv("VITE_API_PORT", 5000)
+
 # Global variables
 model = None
 env = None
@@ -341,8 +346,8 @@ async def main():
         current_z = await get_reward_context(default_config)
         
         print("\nStarting WebSocket server and simulation...")
-        server = await websockets.serve(handle_websocket, "localhost", 8765)
-        print("WebSocket server running on ws://localhost:8765")
+        server = await websockets.serve(handle_websocket, "0.0.0.0", WS_PORT)
+        print(f"WebSocket server started at ws://{BACKEND_DOMAIN}:{WS_PORT}")
         
         await asyncio.gather(
             server.wait_closed(),

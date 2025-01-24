@@ -2,13 +2,15 @@
   import { onMount, onDestroy } from 'svelte';
   import StatusBar from './StatusBar.svelte';
   
-  let currentImageUrl = `http://localhost:5002/amjpeg?${Date.now()}`;
+  const apiUrl = import.meta.env.VITE_API_URL;
+
+  let currentImageUrl = `${apiUrl}/amjpeg?${Date.now()}`;
   let nextImageUrl;
   let refreshInterval;
   let isLoading = true;
   
   function loadNextImage() {
-    nextImageUrl = `http://localhost:5002/amjpeg?${Date.now()}`;
+    nextImageUrl = `${apiUrl}/amjpeg?${Date.now()}`;
   }
 
   function handleImageLoad() {

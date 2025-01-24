@@ -1,0 +1,43 @@
+# Use Python 3.11 slim image as base
+FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    xvfb \
+    libxcb-xinerama0 \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    git \
+    libopengl0 \
+    libegl1 \
+    libxrandr2 \
+    libxext6 \
+    '^libxcb.*-dev' \
+    libx11-xcb-dev \
+    libglu1-mesa-dev \
+    libxrender-dev \
+    libxi-dev \
+    libxkbcommon-dev \
+    libxkbcommon-x11-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV MUJOCO_GL=egl
+ENV DISPLAY=:99
+ENV QT_DEBUG_PLUGINS=1
+
+# Rest of Dockerfile remains the same...
+WORKDIR /app
+RUN pip install uv
+COPY requirements.txt .
+RUN uv pip install -r requirements.txt --system
+RUN uv pip install python-dotenv --system
+COPY scripts /app/scripts
+COPY webserver /app/webserver
+COPY prompt_template.txt /app/prompt_template.txt
+COPY motivo /app/motivo
+RUN mkdir -p /app/runtime
+COPY start.sh .
+RUN chmod +x start.sh
+ENTRYPOINT ["./start.sh"]

@@ -8,11 +8,14 @@
     import { rewardStore } from '../stores/rewardStore';
   
     let socket;
+    // get vite VITE_WS_URL
+    const wsUrl = import.meta.env.VITE_WS_URL;
     let isSocketReady = false;
-  
+
     onMount(() => {
-      console.log("Initializing WebSocket connection...");
-      socket = new WebSocket('ws://localhost:8765');
+    
+      console.log("wsUrl", wsUrl);
+      socket = new WebSocket(wsUrl);
       
       socket.onopen = () => {
         console.log('WebSocket connected');
