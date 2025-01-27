@@ -56,6 +56,17 @@ npm run dev
   - `model.py`: MetaMotivo-M-1 model setup
   - `behaviors.py`: Behavior generation logic
 
+### Vibe 
+
+WIP not working yet but can be prebuilt and run with the following commands:
+
+```bash
+cd vibe
+git clone https://github.com/mkocabas/VIBE.git
+cog predict 
+```
+
+
 ## Key Dependencies
 
 ### Backend
