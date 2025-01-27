@@ -23,6 +23,34 @@ echo '
 ███████╗   ██║       ██║ ╚═╝ ██║╚██████╔╝██████╔╝███████╗██║  ██║██║ ╚████║██║   ██║   ███████╗
 ╚══════╝   ╚═╝       ╚═╝     ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝   ╚═╝   ╚══════╝'
 
+# Function to kill existing processes
+cleanup() {
+    echo "Cleaning up existing processes..."
+    
+    # Kill any existing Xvfb on display :99
+    pkill -f "Xvfb :99"
+    
+    # Kill existing Python processes for your specific scripts
+    pkill -f "python webserver/webserver.py"
+    pkill -f "python motivo/04_ws_example.py"
+    
+    # Wait a moment to ensure processes are killed
+    sleep 2
+}
+
+# Function to handle script termination
+handle_exit() {
+    echo "Shutting down servers..."
+    cleanup
+    exit 0
+}
+
+# Register the cleanup function for script termination
+trap handle_exit SIGINT SIGTERM
+
+# Run cleanup at start
+cleanup
+
 # Start Xvfb
 Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
 
