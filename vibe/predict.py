@@ -2,6 +2,8 @@
 # https://cog.run/python
 
 from cog import BasePredictor, Input, Path
+import os
+import time
 
 
 class Predictor(BasePredictor):
@@ -17,6 +19,10 @@ class Predictor(BasePredictor):
         ),
     ) -> Path:
         """Run a single prediction on the model"""
+
+        # execute command python demo.py --vid_file sample_video.mp4 --output_folder output/ --display
+        #time.sleep(500)
+        os.system(f"python VIBE/demo.py --vid_file {image} --output_folder output/ --display")
         # processed_input = preprocess(image)
         # output = self.model(processed_image, scale)
         # return postprocess(output)

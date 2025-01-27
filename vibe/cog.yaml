@@ -7,12 +7,13 @@ build:
   cuda: "11.8"
 
   # a list of ubuntu apt packages to install
-  # system_packages:
-  #   - "libgl1-mesa-glx"
-  #   - "libglib2.0-0"
+  system_packages:
+    - "unzip"
+    - "libgl1-mesa-glx"
+    - "libglib2.0-0"
 
   # python version in the form '3.11' or '3.11.4'
-  python_version: "3.7"
+  python_version: "3.8"
 
   # a list of packages in the format <package-name>==<version>
   python_packages:
@@ -47,8 +48,8 @@ build:
 
   # commands run after the environment is setup
   run:
-    - " scripts/prepare_data.sh"
-  #   - "echo another command if needed"
+    - "git clone https://github.com/Pipazoul/VIBE.git"
+    -  "cd VIBE && bash scripts/prepare_data.sh"
 
 # predict.py defines how predictions are run on your model
 predict: "predict.py:Predictor"
