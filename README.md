@@ -63,7 +63,9 @@ WIP not working yet but can be prebuilt and run with the following commands:
 ```bash
 cd vibe
 git clone https://github.com/mkocabas/VIBE.git
-cog predict 
+cog predict -i image="https://stableai-space.fra1.digitaloceanspaces.com/screen-club/sample_video.mp4"
+
+
 ```
 
 
