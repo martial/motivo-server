@@ -1,3 +1,5 @@
 .cog
 data
-output
+outputs
+*.pkl
+*.

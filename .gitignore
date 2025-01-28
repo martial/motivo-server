@@ -55,5 +55,4 @@ captured_frames/
 .env
 metamotivo-S-1-datasets
 *.png
-
-output.jpg
+*.jpg

@@ -63,8 +63,13 @@ WIP not working yet but can be prebuilt and run with the following commands:
 ```bash
 cd vibe
 git clone https://github.com/mkocabas/VIBE.git
-cog predict -i image="https://stableai-space.fra1.digitaloceanspaces.com/screen-club/sample_video.mp4"
+# Predict pose + shape on video
+cog predict -i media="https://stableai-space.fra1.digitaloceanspaces.com/screen-club/sample_video.mp4"
+# Predict pose + disable video render (faster)
+cog predict -i render_video="False" -i media="https://stableai-space.fra1.digitaloceanspaces.com/screen-club/sample_video.mp4"
 
+# Predict from youtube url
+cog predict -i media="https://youtu.be/2vjPBrBU-TM?si=c4xMBCml264tyNSh"
 
 ```
 

@@ -13,8 +13,8 @@
 # for Intelligent Systems. All rights reserved.
 #
 # Contact: ps-license@tuebingen.mpg.de
-print("HELLOO")
 import os
+import json
 os.environ['PYOPENGL_PLATFORM'] = 'egl'
 
 import cv2
@@ -56,6 +56,37 @@ MIN_NUM_FRAMES = 25
 print('Start demo...')
 
 
+
+def convert_vibe_to_smpl_json(vibe_results, output_dir="/src/outputs"):
+    """
+    Convert VIBE output results to SMPL JSON format
+    
+    Args:
+        vibe_results (dict): Output from VIBE containing predictions for each person
+        output_dir (str): Directory to save outputs (default: /src/outputs)
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    
+    smpl_data = {}
+    
+    for person_id, data in vibe_results.items():
+        person_data = {
+            "poses": data['pose'].tolist(),  # SMPL pose parameters (72 dimensions per frame)
+            "betas": data['betas'].tolist(),  # SMPL shape parameters (10 dimensions per frame)
+            "trans": data['pred_cam'].tolist(),  # Translation/camera parameters (predicted)
+            "orig_cam": data['orig_cam'].tolist(),  # Original camera parameters
+            "joints3d": data['joints3d'].tolist(),  # 3D joint positions
+            "frame_ids": data['frame_ids'].tolist()  # Frame IDs where the person appears
+        }
+        smpl_data[f"person_{person_id}"] = person_data
+    
+    json_output_path = os.path.join(output_dir, "smpl.json")
+    with open(json_output_path, 'w') as f:
+        json.dump(smpl_data, f, indent=2)
+    
+    print(f'Saved SMPL parameters to "{json_output_path}"')
+    return json_output_path
+
 def main(args):
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
@@ -74,7 +105,10 @@ def main(args):
     if not os.path.isfile(video_file):
         exit(f'Input video \"{video_file}\" does not exist!')
 
-    output_path = os.path.join(args.output_folder, os.path.basename(video_file).replace('.mp4', ''))
+    output_path = "/src/outputs"
+    # if exists remove the output folder
+    if os.path.exists(output_path):
+        shutil.rmtree(output_path)
     os.makedirs(output_path, exist_ok=True)
 
     image_folder, num_frames, img_shape = video_to_images(video_file, return_info=True)
@@ -276,9 +310,9 @@ def main(args):
     print(f'Total time spent: {total_time:.2f} seconds (including model loading time).')
     print(f'Total FPS (including model loading time): {num_frames / total_time:.2f}.')
 
-    print(f'Saving output results to \"{os.path.join(output_path, "vibe_output.pkl")}\".')
+    print(f'Saving output results to \"{output_path}\"')
 
-    joblib.dump(vibe_results, os.path.join(output_path, "vibe_output.pkl"))
+    smpl_json_path = convert_vibe_to_smpl_json(vibe_results)
 
     if not args.no_render:
         # ========= Render results as a single video ========= #
@@ -351,9 +385,7 @@ def main(args):
             cv2.destroyAllWindows()
 
         # ========= Save rendered video ========= #
-        vid_name = os.path.basename(video_file)
-        save_name = f'{vid_name.replace(".mp4", "")}_vibe_result.mp4'
-        save_name = os.path.join(output_path, save_name)
+        save_name = os.path.join(output_path, "video.mp4")
         print(f'Saving result video to {save_name}')
         images_to_video(img_folder=output_img_folder, output_vid_file=save_name)
         shutil.rmtree(output_img_folder)

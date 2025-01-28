@@ -7,7 +7,7 @@ import time
 import subprocess
 import requests
 from pathlib import Path as PathLib  # Renamed to avoid confusion
-
+import base64
 def downloader():
     # Create data directory if it doesn't exist
     data_dir = PathLib("data")
@@ -42,11 +42,9 @@ class Predictor(BasePredictor):
 
     def predict(
         self,
-        image: Path = Input(description="Input video file"),  # Changed to cog.Path
-        scale: float = Input(
-            description="Factor to scale image by", ge=0, le=10, default=1.5
-        ),
-    ) -> str:
+        media: Path = Input(description="Input video file"),  # Changed to cog.Path
+        render_video: bool = Input(default=True, description="Render the output video"),
+    ) -> dict:
         """Run a single prediction on the model"""
         import torch
         print(torch.__version__)
@@ -56,7 +54,10 @@ class Predictor(BasePredictor):
         if not os.path.exists("data/vibe_data/"):
             os.makedirs("data/vibe_data/")
         
-        command = f"python ./scripts/demo.py --vid_file {str(image)} --output_folder output/"
+
+        command = f"python ./scripts/demo.py --vid_file {str(media)} --output_folder output/"
+        if not render_video:
+            command += " --no_render"
         process = subprocess.Popen(
             command,
             shell=True,
@@ -79,5 +80,24 @@ class Predictor(BasePredictor):
             if output == '' and error == '' and process.poll() is not None:
                 break
         
-        return_code = process.poll()
-        return return_code
+        # Return in object {"pose": "open output/pose.json", "video": "open output/video.mp4 and return in base64"}
+
+        # Open the pose.json file
+        pose_path = "/src/outputs/smpl.json"
+        with open(pose_path, "r") as f:
+            pose = f.read()
+        
+        if not render_video:
+            return {"pose": pose, "video": None}
+        
+        # Open the video file
+        video_path = "/src/outputs/video.mp4"
+        with open(video_path, "rb") as f:
+            video = f.read()
+        
+        # Encode the video file in base64
+        video_base64 = base64.b64encode(video).decode("utf-8")
+        # add header to the base64 string
+        video_base64 = "data:video/mp4;base64," + video_base64
+
+        return {"pose": pose, "video": video_base64}
