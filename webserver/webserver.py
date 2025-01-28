@@ -6,10 +6,32 @@ import json
 from datetime import datetime
 from dotenv import load_dotenv
 
+
+# Add these imports at the top
+import uuid
+from werkzeug.utils import secure_filename
+
 # Load environment variables
 load_dotenv()
 
+# use os to get VITE_BACKEND_DOMAIN
+BACKEND_DOMAIN = os.getenv('VITE_BACKEND_DOMAIN')
+VITE_API_PORT = os.getenv('VITE_API_PORT')
+
+
+# Add these configurations after app initialization
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'mp4', 'webm', 'ogg'}
+
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
 app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 CORS(app, resources={
     r"/*": {
         "origins": ["*"],
@@ -121,6 +143,35 @@ def download_file(filename):
     except Exception as e:
         print(f"Error serving download file: {str(e)}")
         return jsonify({'error': str(e)}), 404
+
+@app.route('/upload-video', methods=['POST'])
+def upload_video():
+    if 'video' not in request.files:
+        return jsonify({'error': 'No video file provided'}), 400
+    
+    file = request.files['video']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+        
+    if file and allowed_file(file.filename):
+        # Generate unique filename
+        filename = secure_filename(f"{str(uuid.uuid4())}_{file.filename}")
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(filepath)
+        
+        # Return the video URL
+        video_url = f'http://{BACKEND_DOMAIN}:{VITE_API_PORT}/uploads/{filename}'
+        return jsonify({
+            'success': True,
+            'video_url': video_url
+        })
+    
+    return jsonify({'error': 'Invalid file type'}), 400
+
+@app.route('/uploads/<filename>')
+def serve_video(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5002, debug=True)

@@ -9,6 +9,7 @@
     import { parameterStore } from '../stores/parameterStore';
     import { rewardStore } from '../stores/rewardStore';
     import { websocketService } from '../services/websocketService';
+    import VibePanel from '../components/VibePanel.svelte';
     
     
     // Single declaration of isSocketReady state
@@ -49,7 +50,8 @@
         </div>
 
         <div class="w-[400px] p-2 order-4 lg:order-3">
-            <LiveFeed />
+            <VibePanel />
+            <!-- <LiveFeed /> -->
             <div class="mt-4 flex justify-center">
                 {#if isSocketReady}
                     <RecordButton socket={websocketService.getSocket()} />

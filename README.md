@@ -58,7 +58,7 @@ npm run dev
 
 ### Vibe 
 
-WIP not working yet but can be prebuilt and run with the following commands:
+
 
 ```bash
 cd vibe

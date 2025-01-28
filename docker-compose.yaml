@@ -12,6 +12,8 @@ services:
     env_file:
       - .env
     volumes:
+      - ./motivo:/app/motivo
+      - ./webserver:/app/webserver
       - ./metamotivo-S-1-datasets:/app/metamotivo-S-1-datasets
     deploy:
       resources:
@@ -23,6 +25,12 @@ services:
     runtime: nvidia
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
+    restart: unless-stopped
+  
+  vibe:
+    image: yassinsiouda/cog-vibe:latest
+    ports:
+      - "5000:5000"
     restart: unless-stopped
 
   frontend:
