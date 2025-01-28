@@ -5,16 +5,44 @@ from cog import BasePredictor, Input, Path
 import os
 import time
 import subprocess
+import requests
+from pathlib import Path as PathLib  # Renamed to avoid confusion
+
+def downloader():
+    # Create data directory if it doesn't exist
+    data_dir = PathLib("data")
+    data_dir.mkdir(exist_ok=True)
+    
+    zip_path = data_dir / "vibe_data.zip"
+    
+    # verify if the file exists
+    if not zip_path.exists():
+        print("Downloading model file")
+        # download the file
+        url = "https://stableai-space.fra1.digitaloceanspaces.com/screen-club/vibe_data.zip"
+        r = requests.get(url, allow_redirects=True)
+        
+        # Write the content to file
+        zip_path.write_bytes(r.content)
+        print("File downloaded")
+        
+        # unzip the file using zipfile instead of os.system
+        import zipfile
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(data_dir)
+        print("File extracted")
+    else:
+        print("File already exists")
 
 
 class Predictor(BasePredictor):
     def setup(self) -> None:
         """Load the model into memory to make running multiple predictions efficient"""
-        # self.model = torch.load("./weights.pth")
+        downloader()
 
     def predict(
         self,
-        image: Path = Input(description="Grayscale input image"),
+        image: Path = Input(description="Input video file"),  # Changed to cog.Path
         scale: float = Input(
             description="Factor to scale image by", ge=0, le=10, default=1.5
         ),
@@ -23,10 +51,12 @@ class Predictor(BasePredictor):
         import torch
         print(torch.__version__)
         print(torch.version.cuda)
-        #return ""
-        # execute command python demo.py --vid_file sample_video.mp4 --output_folder output/ --display
-       #time.sleep(500)
-        command = f"python ./scripts/demo.py --vid_file {image} --output_folder output/"
+
+        # Create output directory if it doesn't exist
+        if not os.path.exists("data/vibe_data/"):
+            os.makedirs("data/vibe_data/")
+        
+        command = f"python ./scripts/demo.py --vid_file {str(image)} --output_folder output/"
         process = subprocess.Popen(
             command,
             shell=True,
@@ -34,6 +64,7 @@ class Predictor(BasePredictor):
             stderr=subprocess.PIPE,
             universal_newlines=True
         )
+        
         # Print output in real-time
         while True:
             output = process.stdout.readline()
@@ -50,7 +81,3 @@ class Predictor(BasePredictor):
         
         return_code = process.poll()
         return return_code
-
-        # processed_input = preprocess(image)
-        # output = self.model(processed_image, scale)
-        # return postprocess(output)
