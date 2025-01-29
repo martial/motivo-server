@@ -16,9 +16,9 @@ from moviepy.editor import VideoFileClip
 load_dotenv()
 
 # use os to get VITE_BACKEND_DOMAIN
-BACKEND_DOMAIN = os.getenv('VITE_BACKEND_DOMAIN') or 'localhost'
+VITE_API_URL = os.getenv('VITE_API_URL') or 'localhost'
 VITE_API_PORT = os.getenv('VITE_API_PORT') or 5002
-VITE_VIBE_API_PORT = os.getenv('VITE_VIBE_API_PORT') or 5000
+VITE_VIBE_URL = os.getenv('VITE_VIBE_URL') or 5000
 
 # Add these configurations after app initialization
 UPLOAD_FOLDER = 'uploads'
@@ -161,12 +161,12 @@ def upload_video():
         file.save(filepath)
         
         # Generate the video URL
-        video_url = f'http://{BACKEND_DOMAIN}:{VITE_API_PORT}/uploads/{filename}'
+        video_url = f'{VITE_API_URL}/uploads/{filename}'
         
         # Make prediction request
         try:
             prediction_response = requests.post(
-                f'http://{BACKEND_DOMAIN}:{VITE_VIBE_API_PORT}/predictions',
+                f'{VITE_VIBE_URL}/predictions',
                 headers={
                     'accept': 'application/json',
                     'Content-Type': 'application/json'
@@ -178,7 +178,7 @@ def upload_video():
                     }
                 }
             )
-            print(f'http://{BACKEND_DOMAIN}:{VITE_VIBE_API_PORT}/predictions',)
+            print(f'{VITE_VIBE_URL}/predictions',)
             print(prediction_response.text)
             prediction_data = prediction_response.json()
             

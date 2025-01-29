@@ -12,6 +12,8 @@
   let outputVideoBase64 = "";
   let poseData = null;
 
+  const apiUrl = import.meta.env.VITE_API_URL;
+
   // Configurable options
   export let maxSizeInMB = 50;
   export let acceptedTypes = ["video/mp4", "video/webm", "video/ogg"];
@@ -62,7 +64,7 @@
       formData.append("video", selectedFile);
 
       // Send POST request to upload endpoint
-      const response = await fetch("http://localhost:5002/upload-video", {
+      const response = await fetch(`${apiUrl}/upload-video`, {
         method: "POST",
         body: formData,
       });
