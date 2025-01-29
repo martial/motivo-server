@@ -15,23 +15,28 @@ services:
       - ./motivo:/app/motivo
       - ./webserver:/app/webserver
       - ./metamotivo-S-1-datasets:/app/metamotivo-S-1-datasets
+    restart: unless-stopped
     deploy:
       resources:
         reservations:
           devices:
             - driver: nvidia
-              count: all
+              count: 1
               capabilities: [gpu]
-    runtime: nvidia
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-    restart: unless-stopped
   
   vibe:
     image: yassinsiouda/cog-vibe:latest
     ports:
       - "5000:5000"
     restart: unless-stopped
+    shm_size: '16gb'  # Shared memory size
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   frontend:
     image: yassinsiouda/motivo-client-front:latest
