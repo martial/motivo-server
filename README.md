@@ -71,6 +71,24 @@ cog predict -i render_video="False" -i media="https://stableai-space.fra1.digita
 # Predict from youtube url
 cog predict -i media="https://youtu.be/2vjPBrBU-TM?si=c4xMBCml264tyNSh"
 
+
+**Api**
+The API is available at `https://urlToAPI/predictions` and accepts a POST request with the following parameters:
+
+```bash
+curl -X 'POST' \
+  'https://urlToAPI/predictions' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "input": {
+    "media": "url-to-video.mp4",
+    "render_video": true
+  }
+}'
+
+It will return an output object with the rendered pose + a json file with the pose data.
+
 ```
 
 
