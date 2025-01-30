@@ -43,7 +43,7 @@
 
         <div class="w-[400px] p-2 order-4 lg:order-3">
             <VibePanel />
-            <!-- <LiveFeed /> -->
+            <LiveFeed /> 
             <div class="mt-4 flex justify-center">
                 {#if isSocketReady}
                     <RecordButton socket={websocketService.getSocket()} />
