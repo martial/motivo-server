@@ -56,6 +56,42 @@ npm run dev
   - `model.py`: MetaMotivo-M-1 model setup
   - `behaviors.py`: Behavior generation logic
 
+### Vibe 
+
+
+
+```bash
+cd vibe
+git clone https://github.com/mkocabas/VIBE.git
+# Predict pose + shape on video
+cog predict -i media="https://stableai-space.fra1.digitaloceanspaces.com/screen-club/sample_video.mp4"
+# Predict pose + disable video render (faster)
+cog predict -i render_video="False" -i media="https://stableai-space.fra1.digitaloceanspaces.com/screen-club/sample_video.mp4"
+
+# Predict from youtube url
+cog predict -i media="https://youtu.be/2vjPBrBU-TM?si=c4xMBCml264tyNSh"
+
+
+**Api**
+The API is available at `https://urlToAPI/predictions` and accepts a POST request with the following parameters:
+
+```bash
+curl -X 'POST' \
+  'https://urlToAPI/predictions' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "input": {
+    "media": "url-to-video.mp4",
+    "render_video": true
+  }
+}'
+
+It will return an output object with the rendered pose + a json file with the pose data.
+
+```
+
+
 ## Key Dependencies
 
 ### Backend

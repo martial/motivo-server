@@ -5,11 +5,34 @@ from anthropic import Anthropic
 import json
 from datetime import datetime
 from dotenv import load_dotenv
+import requests
+
+# Add these imports at the top
+import uuid
+from werkzeug.utils import secure_filename
+from moviepy.editor import VideoFileClip
 
 # Load environment variables
 load_dotenv()
 
+# use os to get VITE_BACKEND_DOMAIN
+VITE_API_URL = os.getenv('VITE_API_URL') or 'localhost'
+VITE_API_PORT = os.getenv('VITE_API_PORT') or 5002
+VITE_VIBE_URL = os.getenv('VITE_VIBE_URL') or 5000
+
+# Add these configurations after app initialization
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'mp4', 'webm', 'ogg'}
+
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
 app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 CORS(app, resources={
     r"/*": {
         "origins": ["*"],
@@ -121,6 +144,89 @@ def download_file(filename):
     except Exception as e:
         print(f"Error serving download file: {str(e)}")
         return jsonify({'error': str(e)}), 404
+
+@app.route('/upload-video', methods=['POST'])
+def upload_video():
+    if 'video' not in request.files:
+        return jsonify({'error': 'No video file provided'}), 400
+    
+    file = request.files['video']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+        
+    if file and allowed_file(file.filename):
+        # Generate unique filename
+        filename = secure_filename(f"{str(uuid.uuid4())}_{file.filename}")
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(filepath)
+        
+        # Generate the video URL
+        video_url = f'{VITE_API_URL}/uploads/{filename}'
+        
+        # Make prediction request
+        try:
+            prediction_response = requests.post(
+                f'{VITE_VIBE_URL}/predictions',
+                headers={
+                    'accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                json={
+                    "input": {
+                        "media": video_url,
+                        "render_video": True
+                    }
+                }
+            )
+            print(f'{VITE_VIBE_URL}/predictions',)
+            print(prediction_response.text)
+            prediction_data = prediction_response.json()
+            
+            # Return both the video URL and prediction results
+            return jsonify({
+                'success': True,
+                'video_url': video_url,
+                'prediction': prediction_data
+            })
+            
+        except requests.exceptions.RequestException as e:
+            print(f"Prediction error: {str(e)}")
+            return jsonify({
+                'success': True,
+                'video_url': video_url,
+                'prediction_error': 'Failed to get prediction'
+            })
+    
+    return jsonify({'error': 'Invalid file type'}), 400
+
+@app.route('/uploads/<path:filename>')
+def serve_video(filename):
+    try:
+        # Get absolute path of the uploads folder
+        uploads_path = os.path.abspath(app.config['UPLOAD_FOLDER'])
+        print(f"Absolute uploads path: {uploads_path}")
+        
+        # Clean the filename to prevent directory traversal
+        filename = filename.rstrip('/')
+        
+        # Create absolute path to the file
+        file_path = os.path.join(uploads_path, filename)
+        print(f"Absolute file path: {file_path}")
+        
+        # Verify file exists and is within uploads directory
+        if not os.path.exists(file_path):
+            return jsonify({'error': 'File not found'}), 404
+            
+        if not os.path.commonprefix([uploads_path, os.path.abspath(file_path)]) == uploads_path:
+            return jsonify({'error': 'Invalid path'}), 403
+            
+        # Try serving the file directly using send_file instead
+        return send_file(file_path)
+        
+    except Exception as e:
+        print(f"Error serving video: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5002, debug=True)
