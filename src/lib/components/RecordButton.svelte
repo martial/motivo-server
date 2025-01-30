@@ -1,5 +1,7 @@
-<script>
+<script lang="ts">
   import { websocketService } from '../services/websocketService';
+  
+  const { socket } = $props<{ socket: WebSocket }>();
   
   let isRecording = $state(false);
   let isConnected = $state(false);
@@ -18,12 +20,9 @@
   function handleMessage(event) {
     try {
       const data = JSON.parse(event.data);
-      console.log('Received WebSocket message:', data);
       if (data.type === 'recording_status') {
-        console.log('Recording status update:', data.status);
         isRecording = data.status === 'started';
         if (data.status === 'stopped' && data.downloadUrl) {
-          console.log('Download URL received:', data.downloadUrl);
           downloadUrl = data.downloadUrl;
         }
       }

@@ -4,6 +4,8 @@ import { writable } from "svelte/store";
 export const computingStatus = writable(false);
 
 class WebSocketService {
+  static instance; // Déclarer la propriété statique
+
   constructor() {
     if (WebSocketService.instance) {
       return WebSocketService.instance;
