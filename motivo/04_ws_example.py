@@ -352,6 +352,27 @@ async def handle_websocket(websocket):
                 traceback.print_exc()
         print("WebSocket connection closed")
 
+def normalize_q_value(q_value, min_q=-1000.0, max_q=1000.0):
+    """
+    Normalize Q-value to percentage (0-100%)
+    Args:
+        q_value: Raw Q-value
+        min_q: Expected minimum Q-value (-1000 based on observations)
+        max_q: Expected maximum Q-value (1000 based on observations)
+    Returns:
+        Normalized value between 0 and 100
+    """
+    # Clip the value to min/max range
+    q_value = max(min_q, min(q_value, max_q))
+    
+    # Normalize to 0-1 range
+    normalized = (q_value - min_q) / (max_q - min_q)
+    
+    # Convert to percentage
+    percentage = normalized * 100
+    
+    return percentage
+
 async def run_simulation():
     """Continuous simulation loop"""
     global current_z, is_computing_reward, frame_recorder
@@ -364,6 +385,7 @@ async def run_simulation():
         # Get action and step environment
         action = model.act(observation, current_z, mean=True)
         q_value = compute_q_value(model, observation, current_z, action)
+        q_percentage = normalize_q_value(q_value)
         observation, _, terminated, truncated, _ = env.step(action.cpu().numpy().ravel())
         
         # Get SMPL data
@@ -385,11 +407,11 @@ async def run_simulation():
         except Exception as e:
             print(f"Error sending SMPL data: {str(e)}")
         
-        # Render frame with Q-value overlay
+        # Render frame with normalized Q-value overlay
         frame = env.render()
         cv2.putText(
             frame,
-            f"Q-value: {q_value:.3f}",
+            f"Quality: {q_percentage:.1f}%",  # Display as percentage with 1 decimal
             (10, 30),
             cv2.FONT_HERSHEY_SIMPLEX,
             1,
