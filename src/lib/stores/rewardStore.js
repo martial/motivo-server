@@ -1,190 +1,136 @@
 import { writable } from "svelte/store";
 import { websocketService } from "../services/websocketService";
+import { v4 as uuidv4 } from "uuid";
 
 // Define reward types and their parameters
 export const REWARD_TYPES = {
+  // Basic Movements
   "move-ego": {
-    move_speed: { type: "range", default: 2.0, min: 0, max: 5, step: 0.1 },
-    stand_height: { type: "range", default: 1.4, min: 0.5, max: 2, step: 0.1 },
-    move_angle: { type: "range", default: 0, min: -180, max: 180, step: 1 },
+    move_speed: { type: "range", min: 0, max: 5, step: 0.1, default: 2.0 },
+    stand_height: { type: "range", min: 0, max: 2, step: 0.1, default: 1.4 },
+    move_angle: { type: "range", min: -360, max: 360, step: 15, default: 0 },
     egocentric_target: { type: "checkbox", default: true },
-    low_height: { type: "range", default: 0.6, min: 0.2, max: 1, step: 0.1 },
+    low_height: { type: "range", min: 0, max: 2, step: 0.1, default: 0.6 },
     stay_low: { type: "checkbox", default: false },
   },
-  raisearms: {
-    left: { type: "select", options: ["l", "m", "h"], default: "m" },
-    right: { type: "select", options: ["l", "m", "h"], default: "m" },
-  },
-  "move-and-raise-arms": {
-    move_speed: { type: "range", default: 2.0, min: 0, max: 5, step: 0.1 },
-    move_angle: { type: "range", default: 0, min: -180, max: 180, step: 1 },
-    left_pose: { type: "select", options: ["l", "m", "h"], default: "m" },
-    right_pose: { type: "select", options: ["l", "m", "h"], default: "m" },
-    stand_height: { type: "range", default: 1.4, min: 0.5, max: 2, step: 0.1 },
-    arm_coeff: { type: "range", default: 1.0, min: 0, max: 2, step: 0.1 },
-    loc_coeff: { type: "range", default: 1.0, min: 0, max: 2, step: 0.1 },
-  },
   jump: {
-    jump_height: { type: "range", default: 1.6, min: 0.5, max: 3, step: 0.1 },
-    max_velocity: { type: "range", default: 5.0, min: 1, max: 10, step: 0.1 },
+    jump_height: { type: "range", min: 0.5, max: 2.5, step: 0.1, default: 1.6 },
+    max_velocity: { type: "range", min: 0, max: 10, step: 0.5, default: 5.0 },
   },
   rotation: {
-    axis: { type: "select", options: ["x", "y", "z"], default: "y" },
+    axis: { type: "select", options: ["x", "y", "z"], default: "x" },
     target_ang_velocity: {
       type: "range",
-      default: 5.0,
       min: -10,
       max: 10,
-      step: 0.1,
+      step: 0.5,
+      default: 5.0,
     },
     stand_pelvis_height: {
       type: "range",
+      min: 0.3,
+      max: 1.5,
+      step: 0.1,
       default: 0.8,
-      min: 0.4,
-      max: 1.5,
-      step: 0.1,
-    },
-  },
-  headstand: {
-    stand_pelvis_height: {
-      type: "range",
-      default: 0.95,
-      min: 0.5,
-      max: 1.5,
-      step: 0.05,
     },
   },
   crawl: {
     spine_height: {
       type: "range",
-      default: 0.3,
       min: 0.1,
-      max: 0.6,
-      step: 0.05,
-    },
-    move_speed: { type: "range", default: 1.0, min: 0, max: 3, step: 0.1 },
-    direction: { type: "select", options: ["u", "d"], default: "u" },
-  },
-  liedown: {
-    direction: { type: "select", options: ["up", "down"], default: "down" },
-  },
-  sit: {
-    pelvis_height_th: {
-      type: "range",
-      default: 0,
-      min: -0.5,
-      max: 0.5,
-      step: 0.1,
-    },
-    constrained_knees: { type: "checkbox", default: false },
-  },
-  split: {
-    distance: { type: "range", default: 1.5, min: 0.5, max: 2.5, step: 0.1 },
-  },
-  "head-height": {
-    target_height: { type: "range", default: 1.4, min: 0, max: 2.0, step: 0.1 },
-  },
-  "pelvis-height": {
-    target_height: { type: "range", default: 0.8, min: 0, max: 2.0, step: 0.1 },
-  },
-  "hand-height": {
-    target_height: { type: "range", default: 1.8, min: 0, max: 2.0, step: 0.1 },
-  },
-  "hand-lateral": {
-    target_distance: {
-      type: "range",
-      default: 0.5,
-      min: 0,
       max: 1.0,
       step: 0.1,
+      default: 0.3,
     },
+    move_angle: { type: "range", min: -360, max: 360, step: 15, default: 0 },
+    move_speed: { type: "range", min: 0, max: 2, step: 0.1, default: 1.0 },
+    direction: { type: "select", options: [-1, 1], default: -1 },
+  },
+
+  // Poses
+  raisearms: {
+    target_height: { type: "range", min: 0, max: 2.5, step: 0.1, default: 1.8 },
+  },
+  headstand: {
+    balance_factor: { type: "range", min: 0, max: 2, step: 0.1, default: 1.0 },
+  },
+  liedown: {
+    target_height: { type: "range", min: 0, max: 0.5, step: 0.1, default: 0.2 },
+  },
+  sit: {
+    target_height: { type: "range", min: 0, max: 1, step: 0.1, default: 0.6 },
+  },
+  split: {
+    target_angle: { type: "range", min: 90, max: 180, step: 5, default: 180 },
+  },
+
+  // Combined Actions
+  "move-and-raise-arms": {
+    move_speed: { type: "range", min: 0, max: 5, step: 0.1, default: 2.0 },
+    move_angle: { type: "range", min: -360, max: 360, step: 15, default: 0 },
+    left_pose: { type: "select", options: ["h", "l", "m"], default: "h" },
+    right_pose: { type: "select", options: ["h", "l", "m"], default: "h" },
+    stand_height: { type: "range", min: 0, max: 2, step: 0.1, default: 1.4 },
+    low_height: { type: "range", min: 0, max: 2, step: 0.1, default: 0.6 },
+    stay_low: { type: "checkbox", default: false },
+    egocentric_target: { type: "checkbox", default: true },
+    arm_coeff: { type: "range", min: 0, max: 2, step: 0.1, default: 1.0 },
+    loc_coeff: { type: "range", min: 0, max: 2, step: 0.1, default: 1.0 },
+  },
+
+  // Hand Controls
+  "hand-height": {
+    target_height: { type: "range", min: 0, max: 2.5, step: 0.1, default: 1.8 },
+  },
+  "hand-lateral": {
+    target_distance: { type: "range", min: 0, max: 1, step: 0.1, default: 0.5 },
   },
   "left-hand-height": {
-    target_height: { type: "range", default: 1.0, min: 0, max: 2.0, step: 0.1 },
+    target_height: { type: "range", min: 0, max: 2, step: 0.1, default: 1.0 },
   },
   "left-hand-lateral": {
-    target_distance: {
-      type: "range",
-      default: 0.5,
-      min: -1,
-      max: 1,
-      step: 0.1,
-    },
+    target_distance: { type: "range", min: 0, max: 1, step: 0.1, default: 0.5 },
   },
   "left-hand-forward": {
-    target_distance: {
-      type: "range",
-      default: 0.5,
-      min: -1,
-      max: 1,
-      step: 0.1,
-    },
+    target_distance: { type: "range", min: 0, max: 1, step: 0.1, default: 0.5 },
   },
   "right-hand-height": {
-    target_height: { type: "range", default: 1.0, min: 0, max: 2.0, step: 0.1 },
+    target_height: { type: "range", min: 0, max: 2, step: 0.1, default: 1.0 },
   },
   "right-hand-lateral": {
-    target_distance: {
-      type: "range",
-      default: 0.5,
-      min: -1,
-      max: 1,
-      step: 0.1,
-    },
+    target_distance: { type: "range", min: 0, max: 1, step: 0.1, default: 0.5 },
   },
   "right-hand-forward": {
-    target_distance: {
-      type: "range",
-      default: 0.5,
-      min: -1,
-      max: 1,
-      step: 0.1,
-    },
+    target_distance: { type: "range", min: 0, max: 1, step: 0.1, default: 0.5 },
   },
+
+  // Foot Controls
   "left-foot-height": {
-    target_height: { type: "range", default: 0.0, min: 0, max: 2.0, step: 0.1 },
+    target_height: { type: "range", min: 0, max: 1, step: 0.1, default: 0.1 },
   },
   "left-foot-lateral": {
-    target_distance: {
-      type: "range",
-      default: 0.0,
-      min: -1,
-      max: 1,
-      step: 0.1,
-    },
+    target_distance: { type: "range", min: 0, max: 1, step: 0.1, default: 0.2 },
   },
   "left-foot-forward": {
-    target_distance: {
-      type: "range",
-      default: 0.0,
-      min: -1,
-      max: 2.0,
-      step: 0.1,
-    },
+    target_distance: { type: "range", min: 0, max: 1, step: 0.1, default: 0.2 },
   },
   "right-foot-height": {
-    target_height: { type: "range", default: 0.0, min: 0, max: 2.0, step: 0.1 },
+    target_height: { type: "range", min: 0, max: 1, step: 0.1, default: 0.1 },
   },
   "right-foot-lateral": {
-    target_distance: {
-      type: "range",
-      default: 0.0,
-      min: -1,
-      max: 1,
-      step: 0.1,
-    },
+    target_distance: { type: "range", min: 0, max: 1, step: 0.1, default: 0.2 },
   },
   "right-foot-forward": {
-    target_distance: {
-      type: "range",
-      default: 0.0,
-      min: -1,
-      max: 2.0,
-      step: 0.1,
-    },
+    target_distance: { type: "range", min: 0, max: 1, step: 0.1, default: 0.2 },
   },
-  "stay-upright": {
-    strength: { type: "range", default: 1.0, min: 0, max: 2.0, step: 0.1 },
+
+  // Other Controls
+  "stay-upright": {}, // No parameters needed
+  "head-height": {
+    target_height: { type: "range", min: 0, max: 2, step: 0.1, default: 1.4 },
+  },
+  "pelvis-height": {
+    target_height: { type: "range", min: 0, max: 2, step: 0.1, default: 0.8 },
   },
 };
 
@@ -203,111 +149,115 @@ function createRewardStore() {
     combinationType: "multiplicative",
   });
 
-  function sendRewardRequest(rewards, weights, combinationType) {
-    const socket = websocketService.getSocket();
-    if (socket?.readyState === WebSocket.OPEN) {
-      const rewardRequest = {
-        type: "request_reward",
-        reward: {
-          rewards,
-          weights,
-          combination_type: combinationType,
-        },
-        timestamp: new Date().toISOString(),
-      };
-      console.log("Sending reward request:", rewardRequest);
-      socket.send(JSON.stringify(rewardRequest));
-    }
-  }
-
-  function cleanRewards() {
-    const socket = websocketService.getSocket();
-    if (socket?.readyState === WebSocket.OPEN) {
-      socket.send(
-        JSON.stringify({
-          type: "clean_rewards",
-          timestamp: new Date().toISOString(),
-        })
-      );
-      set({ activeRewards: [], weights: [], combinationType: "additive" });
-    }
-  }
-
   return {
     subscribe,
-    update: (newState) => {
-      set(newState);
-      sendRewardRequest(
-        newState.activeRewards,
-        newState.weights,
-        newState.combinationType
-      );
-    },
-    addReward: (name, params, weight = 1) => {
-      update((state) => {
-        const newState = {
-          ...state,
-          activeRewards: [...state.activeRewards, params],
-          weights: [...state.weights, weight],
+    set,
+    update,
+    addReward: (type, params) => {
+      update((store) => {
+        const newStore = {
+          ...store,
+          activeRewards: [...store.activeRewards, params],
+          weights: [...store.weights, 1.0],
         };
-        sendRewardRequest(
-          newState.activeRewards,
-          newState.weights,
-          newState.combinationType
-        );
-        return newState;
+
+        const ws = websocketService.getSocket();
+        if (ws?.readyState === WebSocket.OPEN) {
+          ws.send(
+            JSON.stringify({
+              type: "request_reward",
+              id: params.id,
+              reward: {
+                rewards: newStore.activeRewards,
+                weights: newStore.weights,
+                combinationType: newStore.combinationType,
+              },
+            })
+          );
+        }
+
+        return newStore;
       });
     },
-    removeReward: (index) => {
-      update((state) => {
-        const newState = {
-          ...state,
-          activeRewards: state.activeRewards.filter((_, i) => i !== index),
-          weights: state.weights.filter((_, i) => i !== index),
-        };
-        sendRewardRequest(
-          newState.activeRewards,
-          newState.weights,
-          newState.combinationType
+    removeReward: (rewardId) => {
+      update((store) => {
+        const rewardIndex = store.activeRewards.findIndex(
+          (r) => r.id === rewardId
         );
-        return newState;
+        if (rewardIndex === -1) return store;
+
+        const newActiveRewards = [...store.activeRewards];
+        const newWeights = [...store.weights];
+
+        newActiveRewards.splice(rewardIndex, 1);
+        newWeights.splice(rewardIndex, 1);
+
+        const newStore = {
+          ...store,
+          activeRewards: newActiveRewards,
+          weights: newWeights,
+        };
+
+        // Send updated configuration to WebSocket
+        const ws = websocketService.getSocket();
+        if (ws?.readyState === WebSocket.OPEN) {
+          ws.send(
+            JSON.stringify({
+              type: "request_reward",
+              reward: {
+                rewards: newStore.activeRewards,
+                weights: newStore.weights,
+                combinationType: newStore.combinationType,
+              },
+            })
+          );
+        }
+
+        return newStore;
       });
     },
     updateWeight: (index, weight) => {
-      update((state) => {
-        const newState = {
-          ...state,
-          weights: state.weights.map((w, i) => (i === index ? weight : w)),
+      update((store) => {
+        const newWeights = [...store.weights];
+        newWeights[index] = weight;
+
+        const newStore = {
+          ...store,
+          weights: newWeights,
         };
-        sendRewardRequest(
-          newState.activeRewards,
-          newState.weights,
-          newState.combinationType
-        );
-        return newState;
+
+        const ws = websocketService.getSocket();
+        if (ws?.readyState === WebSocket.OPEN) {
+          ws.send(
+            JSON.stringify({
+              type: "request_reward",
+              reward: {
+                rewards: store.activeRewards,
+                weights: newWeights,
+                combinationType: store.combinationType,
+              },
+            })
+          );
+        }
+
+        return newStore;
       });
     },
     cleanRewards: () => {
-      update((state) => ({
-        ...state,
+      set({
         activeRewards: [],
         weights: [],
-      }));
-      cleanRewards();
-    },
-    setCombinationType: (type) => {
-      update((state) => {
-        const newState = {
-          ...state,
-          combinationType: type,
-        };
-        sendRewardRequest(
-          newState.activeRewards,
-          newState.weights,
-          newState.combinationType
-        );
-        return newState;
+        combinationType: "multiplicative",
       });
+
+      const ws = websocketService.getSocket();
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(
+          JSON.stringify({
+            type: "clean_rewards",
+          })
+        );
+      }
     },
   };
 }

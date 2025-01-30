@@ -5,7 +5,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 
 async def listen_smpl():
-    uri = "wss://ws-motivo.doesnotexist.club:8443/smpl"  # Try port 8443
+    uri = "wss://ws-motivo.doesnotexist.club/smpl"  # Try port 8443
     async with websockets.connect(uri) as websocket:
         print("Connected!")
         while True:

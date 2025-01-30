@@ -18,6 +18,10 @@ from custom_rewards import print_model_info, list_model_body_names, print_availa
 from humenv import rewards as humenv_rewards
 from typing import Dict, Any
 from frame_utils import FrameRecorder  # Update import to use existing file
+from cache_utils import RewardContextCache
+from ws_manager import WebSocketManager
+from utils import normalize_q_value
+from display_utils import DisplayManager
 
 
 # import from env BACKEND_DOMAIN
@@ -35,8 +39,10 @@ current_z = None     # Current active context
 thread_pool = ThreadPoolExecutor(max_workers=1)  # Increased from 1 to 2
 is_computing_reward = False  # New flag to track reward computation status
 frame_recorder = None  # Add this line
-connected_clients = set()  # Store all connected websocket clients
-unique_clients = set()     # Store unique IP addresses
+ws_manager = WebSocketManager()  # Replace connected_clients and unique_clients sets
+active_rewards = None  # Current active reward configuration
+context_cache = RewardContextCache()
+display_manager = DisplayManager()
 
 async def get_reward_context(reward_config):
     """Async wrapper for reward context computation"""
@@ -64,27 +70,14 @@ async def get_reward_context(reward_config):
 
 async def broadcast_pose(pose_data):
     """Broadcast pose data to all connected clients"""
-    disconnected_clients = set()
-    
-    for client in connected_clients:
-        try:
-            await client.send(json.dumps(pose_data))
-        except websockets.exceptions.ConnectionClosed:
-            disconnected_clients.add(client)
-    
-    # Remove disconnected clients
-    connected_clients.difference_update(disconnected_clients)
+    await ws_manager.broadcast(pose_data)
 
 async def handle_websocket(websocket):
     """Handle websocket connections"""
-    global current_z, active_contexts, is_computing_reward, frame_recorder
+    global current_z, active_rewards, is_computing_reward, frame_recorder
     
     print("\n=== New WebSocket Connection Established ===")
-    # Get client IP address
-    client_ip = websocket.remote_address[0]
-    
-    connected_clients.add(websocket)  # Add new client to set
-    unique_clients.add(client_ip)     # Add IP to unique set
+    ws_manager.add_client(websocket)
     
     try:
         async for message in websocket:
@@ -209,35 +202,22 @@ async def handle_websocket(websocket):
                         await websocket.send(json.dumps(response))
 
                 elif message_type == "debug_model_info":
-                    # Broadcast both debug info and client counts
+                    stats = ws_manager.get_stats()
                     response = {
                         "type": "debug_model_info",
                         "is_computing": is_computing_reward,
-                        "connected_clients": len(connected_clients),
-                        "unique_clients": len(unique_clients)
+                        **stats
                     }
-                    await broadcast_pose(response)
+                    await ws_manager.broadcast(response)
                 
                 elif message_type == "request_reward":
-                    config_key = json.dumps(data['reward'], sort_keys=True)
-                    print(f"\nProcessing reward request...")
-                    print(f"Active contexts before: {len(active_contexts)}")
+                    print("\n=== Processing Reward Combination ===")
                     
-                    # Check if we already computed this reward context
-                    if config_key in active_contexts:
-                        print("Using cached reward context")
-                        current_z = active_contexts[config_key]
-                    else:
-                        print("Computing new reward context...")
-                        # Move combination_type into the reward config
-                        reward_config = data['reward']
-                        if 'combination_type' in data:
-                            reward_config['combination_type'] = data['combination_type']
-                        
-                        # Compute and cache new context
-                        z = await get_reward_context(reward_config)
-                        active_contexts[config_key] = z
-                        current_z = z
+                    # Clear active rewards first
+                    global active_rewards
+                    active_rewards = data['reward']
+                    
+                    current_z = await context_cache.get_cached_context(active_rewards, get_reward_context)
                     
                     response = {
                         "type": "reward",
@@ -247,23 +227,27 @@ async def handle_websocket(websocket):
                     }
                     await websocket.send(json.dumps(response))
                     
+                    print(f"\nStatus:")
+                    print(f"Active Rewards: {json.dumps(active_rewards['rewards'], indent=2)}")
+                    print(f"Cached Computations: {len(context_cache.computation_cache)}")
+                    print("=== End Processing ===\n")
+                
                 elif message_type == "clean_rewards":
-                    print("\nCleaning rewards...")
-                    print(f"Active contexts before cleaning: {len(active_contexts)}")
-                    active_contexts.clear()
+                    print("\nCleaning active rewards...")
+                    print(f"Cached computations available: {len(context_cache.computation_cache)}")
                     
-                    # Set default standing behavior
-                    default_config = {
+                    # Clear active rewards but keep computation cache
+                    active_rewards = {
                         'rewards': [
                             { 'name': 'move-ego', 'move_speed': 0.0, 'stand_height': 1.4 }
                         ],
                         'weights': [1.0]
                     }
-                    print("\nSetting default standing behavior:")
-                    print(f"Default config: {json.dumps(default_config, indent=2)}")
                     
-                    z = await get_reward_context(default_config)
-                    current_z = z
+                    print("\nSetting default standing behavior:")
+                    print(f"Default config: {json.dumps(active_rewards, indent=2)}")
+                    
+                    current_z = await context_cache.get_cached_context(active_rewards, get_reward_context)
                     
                     # Reset environment
                     observation, _ = env.reset()
@@ -274,7 +258,6 @@ async def handle_websocket(websocket):
                         "status": "success",
                         "timestamp": data.get("timestamp", "")
                     }
-                    print(f"Sending response: {response}")
                     await websocket.send(json.dumps(response))
                     
                 elif message_type == "update_parameters":
@@ -367,10 +350,7 @@ async def handle_websocket(websocket):
     except websockets.exceptions.ConnectionClosed:
         print("Client disconnected")
     finally:
-        connected_clients.remove(websocket)
-        # Only remove IP from unique set if no other connections from that IP
-        if not any(ws.remote_address[0] == client_ip for ws in connected_clients):
-            unique_clients.remove(client_ip)
+        ws_manager.remove_client(websocket)
         if frame_recorder and frame_recorder.recording:
             try:
                 frame_recorder.end_record()
@@ -378,27 +358,6 @@ async def handle_websocket(websocket):
                 print(f"Error in cleanup: {str(e)}")
                 traceback.print_exc()
         print("WebSocket connection closed")
-
-def normalize_q_value(q_value, min_q=-1000.0, max_q=1000.0):
-    """
-    Normalize Q-value to percentage (0-100%)
-    Args:
-        q_value: Raw Q-value
-        min_q: Expected minimum Q-value (-1000 based on observations)
-        max_q: Expected maximum Q-value (1000 based on observations)
-    Returns:
-        Normalized value between 0 and 100
-    """
-    # Clip the value to min/max range
-    q_value = max(min_q, min(q_value, max_q))
-    
-    # Normalize to 0-1 range
-    normalized = (q_value - min_q) / (max_q - min_q)
-    
-    # Convert to percentage
-    percentage = normalized * 100
-    
-    return percentage
 
 async def run_simulation():
     """Continuous simulation loop"""
@@ -412,7 +371,7 @@ async def run_simulation():
         q_percentage = normalize_q_value(q_value)
         observation, _, terminated, truncated, _ = env.step(action.cpu().numpy().ravel())
         
-        # Broadcast pose data to all connected clients
+        # Broadcast pose data
         try:
             qpos = env.unwrapped.data.qpos
             pose, trans = qpos_to_smpl(qpos, env.unwrapped.model)
@@ -429,53 +388,29 @@ async def run_simulation():
         except Exception as e:
             print(f"Error broadcasting pose data: {str(e)}")
         
-        # Render frame with normalized Q-value overlay
+        # Render and display frame
         frame = env.render()
-        cv2.putText(
+        resized_frame = display_manager.show_frame(
             frame,
-            f"Quality: {q_percentage:.1f}%",  # Display as percentage with 1 decimal
-            (10, 30),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            1,
-            (255, 255, 255),
-            2
+            q_percentage=q_percentage,
+            is_computing=is_computing_reward
         )
-        
-        # Add computing indicator text
-        if is_computing_reward:
-            cv2.putText(
-                frame,
-                "Computing rewards...",
-                (10, 60),  # Position just below Q-value
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.5,  # Smaller font size
-                (255, 255, 0),  # Yellow color
-                1  # Thinner line
-            )
-        
-        # Resize frame to 320x240 before saving
-        resized_frame = cv2.resize(frame, (320, 240), interpolation=cv2.INTER_AREA)
-        
-        cv2.imshow("Humanoid Simulation", cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
         cv2.imwrite('../output.jpg', resized_frame)
         
-        key = cv2.waitKey(1) & 0xFF
-        if key == 27:  # ESC
+        # Check for key presses
+        should_quit, should_save = display_manager.check_key()
+        if should_quit:
             break
-        elif key == ord('s'):  # Press 's' to save frame
+        elif should_save:
             try:
-                # Get data from environment
                 env_data = env.unwrapped.data
-                
-                # Save frame with state data
                 save_frame_data(
                     frame=frame,
                     qpos=env_data.qpos.copy(),
                     qvel=env_data.qvel.copy(),
-                    env=env  # Pass the environment instance
+                    env=env
                 )
-                print("Frame saved! ��")
-                
+                print("Frame saved! 📸")
             except Exception as e:
                 print("Error during frame save:", str(e))
                 print("Observation shape:", observation.shape)
@@ -488,7 +423,7 @@ async def run_simulation():
 
 async def main():
     """Main function"""
-    global model, env, buffer_data, current_z  # Add current_z to globals
+    global model, env, buffer_data, current_z
     
     try:
         print("\n=== Available Rewards ===")
@@ -515,7 +450,7 @@ async def main():
         print("Downloading buffer data...")
         buffer_data = download_buffer()
         
-        # Pre-compute default context to avoid initial lag
+        # Pre-compute default context and store in cache
         default_config = {
             'rewards': [
                 { 'name': 'move-ego', 'move_speed': 0.0, 'stand_height': 1.4 }
@@ -523,9 +458,10 @@ async def main():
             'weights': [1.0]
         }
         print("\nPre-computing default context...")
-        current_z = await get_reward_context(default_config)  # Make sure this gets assigned
         
-        if current_z is None:  # Add safety check
+        current_z = await context_cache.get_cached_context(default_config, get_reward_context)
+        
+        if current_z is None:
             raise RuntimeError("Failed to compute initial context")
             
         print("\nStarting WebSocket server and simulation...")
@@ -540,8 +476,8 @@ async def main():
     except KeyboardInterrupt:
         print("\nShutting down...")
     finally:
+        display_manager.cleanup()
         thread_pool.shutdown()
-        cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -103,7 +103,6 @@
     <!-- Updated Overlay Controls -->
     <div class="absolute bottom-0 left-0 right-0 p-2 bg-black/50 backdrop-blur-sm">
       <div class="flex items-center justify-between text-white">
-        <span class="text-sm font-medium">Q-Value: {qValue.toFixed(3)}</span>
         <span class="text-sm font-medium">
           {#if !isConnected}
             <span class="text-red-400">Disconnected</span>

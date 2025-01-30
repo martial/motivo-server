@@ -3,6 +3,7 @@
   import { favoriteStore } from '../stores/favoriteStore';
   import ParameterControl from './ParameterControl.svelte';
   import ParameterGroup from './ParameterGroup.svelte';
+  import { v4 as uuidv4 } from 'uuid';
 
   const REWARD_GROUPS = {
     'Basic Movements': ['move-ego', 'jump', 'rotation', 'crawl'],
@@ -85,11 +86,14 @@
   }
 
   function addReward() {
+    const rewardId = uuidv4();
     const rewardParams = {
+      id: rewardId,
       name: selectedRewardType,
       ...activeParameters
     };
-    rewardStore.addReward(selectedRewardType, rewardParams);
+    console.log("Adding reward:", rewardParams);
+    rewardStore.addReward(selectedRewardType, rewardParams, rewardId);
   }
 
   // Update selected reward type when group changes
@@ -113,16 +117,17 @@
   }
 
   // Update the debounced version to only handle store updates
-  const debouncedUpdateWeight = debounce((index, value) => {
-    rewardStore.updateWeight(index, value);
+  const debouncedUpdateWeight = debounce((id, value) => {
+    rewardStore.updateWeight(id, value);
   }, 300);
 
   // Update the weight handling function to ensure numeric values
   function handleWeightChange(index, value) {
     const numericValue = Number(value) || 0;
+    const reward = $rewardStore.activeRewards[index];
     displayWeights[index] = numericValue;
-    displayWeights = [...displayWeights]; // Trigger reactivity
-    debouncedUpdateWeight(index, numericValue);
+    displayWeights = [...displayWeights];
+    debouncedUpdateWeight(reward.id, numericValue);
   }
 </script>
 
@@ -210,4 +215,31 @@
       </button>
     </div>
   </div>
+
+  <!-- Add active rewards list with IDs -->
+  {#if $rewardStore.activeRewards.length > 0}
+    <div class="mt-4 bg-white rounded-lg shadow-lg p-4">
+      <h2 class="text-lg font-bold mb-4 text-gray-800">Active Rewards</h2>
+      <div class="space-y-2">
+        {#each $rewardStore.activeRewards as reward, index}
+          <div class="flex items-center gap-3 bg-gray-50 p-3 rounded-md hover:bg-gray-100 transition-colors">
+            <span class="text-xs text-gray-500 font-mono">{reward.id.slice(0,8)}</span>
+            <span class="flex-grow font-medium text-gray-700">{reward.name}</span>
+            <input
+              type="number"
+              class="w-24 text-sm rounded-md border-0 py-1.5 px-2 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-blue-600 bg-white shadow-sm"
+              value={displayWeights[index]}
+              on:input={(e) => handleWeightChange(index, e.target.value)}
+            />
+            <button
+              class="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition-colors"
+              on:click={() => rewardStore.removeReward(reward.id)}
+            >
+              ×
+            </button>
+          </div>
+        {/each}
+      </div>
+    </div>
+  {/if}
 </div> 

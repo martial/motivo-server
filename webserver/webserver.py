@@ -1,16 +1,22 @@
+# Standard library imports
+import os
+import uuid
+import traceback
+from datetime import datetime
+
+# Third-party imports
 from flask import Flask, send_from_directory, request, jsonify, send_file
 from flask_cors import CORS
-import os
 from anthropic import Anthropic
-import json
-from datetime import datetime
+from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 import requests
 
 # Add these imports at the top
-import uuid
-from werkzeug.utils import secure_filename
-from moviepy.editor import VideoFileClip
+from flask import Flask, send_from_directory, request, jsonify, send_file
+from flask_cors import CORS
+import json
+from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()

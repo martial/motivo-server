@@ -41,6 +41,48 @@ def create_reward_function(reward_type, weight):
             except Exception as e:
                 continue
     
+    # Handle basic movements
+    if name == 'jump':
+        return (humenv_rewards.JumpReward(
+            jump_height=reward_type.get('jump_height', 1.6),
+            max_velocity=reward_type.get('max_velocity', 5.0)
+        ), weight)
+    elif name == 'rotation':
+        return (humenv_rewards.RotationReward(
+            axis=reward_type.get('axis', 'x'),
+            target_ang_velocity=reward_type.get('target_ang_velocity', 5.0),
+            stand_pelvis_height=reward_type.get('stand_pelvis_height', 0.8)
+        ), weight)
+    elif name == 'crawl':
+        return (humenv_rewards.CrawlReward(
+            spine_height=reward_type.get('spine_height', 0.3),
+            move_angle=reward_type.get('move_angle', 0),
+            move_speed=reward_type.get('move_speed', 1),
+            direction=reward_type.get('direction', -1)
+        ), weight)
+    
+    # Handle poses
+    elif name == 'raisearms':
+        return (humenv_rewards.RaiseArmsReward(
+            target_height=reward_type.get('target_height', 1.8)
+        ), weight)
+    elif name == 'headstand':
+        return (humenv_rewards.HeadstandReward(
+            balance_factor=reward_type.get('balance_factor', 1.0)
+        ), weight)
+    elif name == 'liedown':
+        return (humenv_rewards.LieDownReward(
+            target_height=reward_type.get('target_height', 0.2)
+        ), weight)
+    elif name == 'sit':
+        return (humenv_rewards.SitReward(
+            target_height=reward_type.get('target_height', 0.6)
+        ), weight)
+    elif name == 'split':
+        return (humenv_rewards.SplitReward(
+            target_angle=reward_type.get('target_angle', 180)
+        ), weight)
+    
     # Handle custom reward types with consistent parameter naming
     if name == 'head-height':
         return (HeadHeightReward(target_height=reward_type.get('target_height', 1.4)), weight)
@@ -108,7 +150,7 @@ def create_reward_function(reward_type, weight):
 
 def compute_reward_context(reward_config, env, model, buffer_data):
     """Compute reward context"""
-    combination_type = reward_config.get('combination_type', 'additive')
+    combination_type = reward_config.get('combinationType', 'additive')
     
     print("\n" + "="*50)
     print(f"USING REWARD COMBINATION METHOD: {combination_type.upper()}")

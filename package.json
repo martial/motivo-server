@@ -16,6 +16,7 @@
     "vite": "^6.0.5"
   },
   "dependencies": {
-    "svelte-routing": "^2.13.0"
+    "svelte-routing": "^2.13.0",
+    "uuid": "^11.0.5"
   }
 }
