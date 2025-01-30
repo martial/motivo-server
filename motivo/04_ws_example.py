@@ -9,6 +9,7 @@ import os
 from datetime import datetime
 import numpy as np
 from frame_utils import save_frame_data
+from smpl_utils import qpos_to_smpl  # Add this import
 
 from env_setup import setup_environment
 from buffer_utils import download_buffer
@@ -329,29 +330,33 @@ async def run_simulation():
     global current_z, is_computing_reward, frame_recorder
     observation, _ = env.reset()
     
-    frame_counter = 0
-    q_value = 0.0
-    
-    # Initialize with default context if none exists
-    if current_z is None:
-        print("\nInitializing with default 'stand' behavior...")
-        default_config = {
-            'rewards': [
-                { 'name': 'move-ego', 'move_speed': 0.0, 'stand_height': 1.4 }
-            ],
-            'weights': [1.0]
-        }
-        current_z = await get_reward_context(default_config)
+    # Create WebSocket connection for SMPL data
+    smpl_socket = await websockets.connect(f'ws://{BACKEND_DOMAIN}:{WS_PORT}/smpl')
     
     while True:
-        # Get action first
+        # Get action and step environment
         action = model.act(observation, current_z, mean=True)
         q_value = compute_q_value(model, observation, current_z, action)
+        observation, _, terminated, truncated, _ = env.step(action.cpu().numpy().ravel())
         
-        # Step the environment
-        observation, _, terminated, truncated, _ = env.step(
-            action.cpu().numpy().ravel()
-        )
+        # Get SMPL data
+        try:
+            qpos = env.unwrapped.data.qpos
+            pose, trans = qpos_to_smpl(qpos, env.unwrapped.model)
+            
+            # Create SMPL data message
+            smpl_data = {
+                "type": "smpl_update",
+                "pose": pose.tolist(),  # Convert numpy arrays to lists
+                "trans": trans.tolist(),
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            # Send SMPL data
+            await smpl_socket.send(json.dumps(smpl_data))
+            
+        except Exception as e:
+            print(f"Error sending SMPL data: {str(e)}")
         
         # Render frame with Q-value overlay
         frame = env.render()
@@ -425,21 +430,24 @@ async def run_simulation():
         
         await asyncio.sleep(1/60)  # 60 FPS target
 
+    if smpl_socket:
+        await smpl_socket.close()
+
 async def main():
     """Main function"""
-    global model, env, buffer_data
+    global model, env, buffer_data, current_z  # Add current_z to globals
     
     try:
         print("\n=== Available Rewards ===")
-        print_available_rewards()  # Add this line to print all rewards
+        print_available_rewards()
         print("\n=== System Setup ===")
         
         # Device selection with CUDA support
         if torch.cuda.is_available():
             device = "cuda"
-            torch.backends.cudnn.benchmark = True  # Enable CUDA optimization
+            torch.backends.cudnn.benchmark = True
         elif torch.backends.mps.is_available():
-            device = "mps"  # Apple Silicon GPU
+            device = "mps"
         else:
             device = "cpu"
         print(f"Using device: {device}")
@@ -462,8 +470,11 @@ async def main():
             'weights': [1.0]
         }
         print("\nPre-computing default context...")
-        current_z = await get_reward_context(default_config)
+        current_z = await get_reward_context(default_config)  # Make sure this gets assigned
         
+        if current_z is None:  # Add safety check
+            raise RuntimeError("Failed to compute initial context")
+            
         print("\nStarting WebSocket server and simulation...")
         server = await websockets.serve(handle_websocket, "0.0.0.0", WS_PORT)
         print(f"WebSocket server started at ws://{BACKEND_DOMAIN}:{WS_PORT}")
