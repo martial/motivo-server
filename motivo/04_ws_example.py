@@ -35,6 +35,7 @@ current_z = None     # Current active context
 thread_pool = ThreadPoolExecutor(max_workers=1)  # Increased from 1 to 2
 is_computing_reward = False  # New flag to track reward computation status
 frame_recorder = None  # Add this line
+connected_clients = set()  # Store all connected websocket clients
 
 async def get_reward_context(reward_config):
     """Async wrapper for reward context computation"""
@@ -60,11 +61,25 @@ async def get_reward_context(reward_config):
         is_computing_reward = False
         print("✅ Computation complete!")
 
+async def broadcast_pose(pose_data):
+    """Broadcast pose data to all connected clients"""
+    disconnected_clients = set()
+    
+    for client in connected_clients:
+        try:
+            await client.send(json.dumps(pose_data))
+        except websockets.exceptions.ConnectionClosed:
+            disconnected_clients.add(client)
+    
+    # Remove disconnected clients
+    connected_clients.difference_update(disconnected_clients)
+
 async def handle_websocket(websocket):
     """Handle websocket connections"""
     global current_z, active_contexts, is_computing_reward, frame_recorder
     
     print("\n=== New WebSocket Connection Established ===")
+    connected_clients.add(websocket)  # Add new client to set
     
     try:
         async for message in websocket:
@@ -344,6 +359,7 @@ async def handle_websocket(websocket):
     except websockets.exceptions.ConnectionClosed:
         print("Client disconnected")
     finally:
+        connected_clients.remove(websocket)  # Remove client when disconnected
         if frame_recorder and frame_recorder.recording:
             try:
                 frame_recorder.end_record()
@@ -378,9 +394,6 @@ async def run_simulation():
     global current_z, is_computing_reward, frame_recorder
     observation, _ = env.reset()
     
-    # Create WebSocket connection for SMPL data
-    smpl_socket = await websockets.connect(f'ws://{BACKEND_DOMAIN}:{WS_PORT}/smpl')
-    
     while True:
         # Get action and step environment
         action = model.act(observation, current_z, mean=True)
@@ -388,24 +401,22 @@ async def run_simulation():
         q_percentage = normalize_q_value(q_value)
         observation, _, terminated, truncated, _ = env.step(action.cpu().numpy().ravel())
         
-        # Get SMPL data
+        # Broadcast pose data to all connected clients
         try:
             qpos = env.unwrapped.data.qpos
             pose, trans = qpos_to_smpl(qpos, env.unwrapped.model)
             
-            # Create SMPL data message
-            smpl_data = {
+            pose_data = {
                 "type": "smpl_update",
-                "pose": pose.tolist(),  # Convert numpy arrays to lists
+                "pose": pose.tolist(),
                 "trans": trans.tolist(),
                 "timestamp": datetime.now().isoformat()
             }
             
-            # Send SMPL data
-            await smpl_socket.send(json.dumps(smpl_data))
+            await broadcast_pose(pose_data)
             
         except Exception as e:
-            print(f"Error sending SMPL data: {str(e)}")
+            print(f"Error broadcasting pose data: {str(e)}")
         
         # Render frame with normalized Q-value overlay
         frame = env.render()
@@ -459,28 +470,10 @@ async def run_simulation():
                 print("Observation shape:", observation.shape)
                 print("Data structure:", type(env.unwrapped.data))
         
-        # Update recording logic - moved after frame rendering
-        if frame_recorder and frame_recorder.recording:
-            try:
-                print("Recording frame...")  # Debug log
-                frame_recorder.record_frame_data(
-                    frame=frame.copy(),  # Make a copy of the frame
-                    qpos=env.unwrapped.data.qpos.copy(),
-                    qvel=env.unwrapped.data.qvel.copy(),
-                    env=env
-                )
-            except Exception as e:
-                print(f"Error recording frame: {str(e)}")
-                import traceback
-                traceback.print_exc()
-        
         if terminated:
             observation, _ = env.reset()
         
         await asyncio.sleep(1/60)  # 60 FPS target
-
-    if smpl_socket:
-        await smpl_socket.close()
 
 async def main():
     """Main function"""
