@@ -126,7 +126,7 @@
   });
 </script>
 
-<div class="w-96 py-4">
+<div class="">
   <div class="bg-white rounded-lg shadow-lg p-4">
     <h1 class="text-lg font-bold mb-4 text-gray-800">Video Upload</h1>
 

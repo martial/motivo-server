@@ -3,6 +3,7 @@
   import { websocketService } from "../services/websocketService";
   import { writable } from "svelte/store";
   import LiveFeed from "../components/LiveFeed.svelte";
+    import VibePanel from "../components/VibePanel.svelte";
 
   // Reactive stores
   const status = writable("Disconnected");
@@ -326,6 +327,9 @@
     <!-- Right Column: Live Feed -->
     <div>
       <LiveFeed />
+    </div>
+    <div>
+      <VibePanel />
     </div>
   </div>
 </div> 
