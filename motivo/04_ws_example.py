@@ -36,6 +36,7 @@ thread_pool = ThreadPoolExecutor(max_workers=1)  # Increased from 1 to 2
 is_computing_reward = False  # New flag to track reward computation status
 frame_recorder = None  # Add this line
 connected_clients = set()  # Store all connected websocket clients
+unique_clients = set()     # Store unique IP addresses
 
 async def get_reward_context(reward_config):
     """Async wrapper for reward context computation"""
@@ -79,7 +80,11 @@ async def handle_websocket(websocket):
     global current_z, active_contexts, is_computing_reward, frame_recorder
     
     print("\n=== New WebSocket Connection Established ===")
+    # Get client IP address
+    client_ip = websocket.remote_address[0]
+    
     connected_clients.add(websocket)  # Add new client to set
+    unique_clients.add(client_ip)     # Add IP to unique set
     
     try:
         async for message in websocket:
@@ -204,11 +209,14 @@ async def handle_websocket(websocket):
                         await websocket.send(json.dumps(response))
 
                 elif message_type == "debug_model_info":
+                    # Broadcast both debug info and client counts
                     response = {
                         "type": "debug_model_info",
-                        "is_computing": is_computing_reward
+                        "is_computing": is_computing_reward,
+                        "connected_clients": len(connected_clients),
+                        "unique_clients": len(unique_clients)
                     }
-                    await websocket.send(json.dumps(response))
+                    await broadcast_pose(response)
                 
                 elif message_type == "request_reward":
                     config_key = json.dumps(data['reward'], sort_keys=True)
@@ -359,7 +367,10 @@ async def handle_websocket(websocket):
     except websockets.exceptions.ConnectionClosed:
         print("Client disconnected")
     finally:
-        connected_clients.remove(websocket)  # Remove client when disconnected
+        connected_clients.remove(websocket)
+        # Only remove IP from unique set if no other connections from that IP
+        if not any(ws.remote_address[0] == client_ip for ws in connected_clients):
+            unique_clients.remove(client_ip)
         if frame_recorder and frame_recorder.recording:
             try:
                 frame_recorder.end_record()

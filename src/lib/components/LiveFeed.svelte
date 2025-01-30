@@ -1,6 +1,6 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
-  import { websocketService } from '../services/websocketService';
+  import { websocketService, computingStatus } from '../services/websocketService';
   import StatusBar from './StatusBar.svelte';
   import RecordButton from './RecordButton.svelte';
   
@@ -33,11 +33,16 @@
 
   function handleReadyState(ready) {
     isConnected = ready;
+    if (!ready) {
+      $computingStatus = false;
+      isLoading = true;
+    }
   }
   
   onMount(() => {
     loadNextImage();
     cleanupListener = websocketService.onReadyStateChange(handleReadyState);
+    isConnected = websocketService.getSocket()?.readyState === WebSocket.OPEN;
   });
   
   onDestroy(() => {
@@ -68,9 +73,14 @@
   
   <!-- Image Container -->
   <div class="relative rounded-xl overflow-hidden bg-white shadow-lg border border-gray-200">
-    {#if isLoading}
+    {#if !isConnected || isLoading}
       <div class="absolute inset-0 flex items-center justify-center bg-gray-50/80 backdrop-blur-sm">
-        <div class="animate-spin rounded-full h-12 w-12 border-4 border-purple-500 border-t-transparent"></div>
+        <div class="flex flex-col items-center gap-2">
+          <div class="animate-spin rounded-full h-12 w-12 border-4 border-purple-500 border-t-transparent"></div>
+          <span class="text-sm text-gray-600">
+            {!isConnected ? 'Connecting...' : 'Loading feed...'}
+          </span>
+        </div>
       </div>
     {/if}
     
@@ -90,10 +100,19 @@
       on:error={handleImageError}
     />
 
-    <!-- Overlay Controls -->
+    <!-- Updated Overlay Controls -->
     <div class="absolute bottom-0 left-0 right-0 p-2 bg-black/50 backdrop-blur-sm">
       <div class="flex items-center justify-between text-white">
         <span class="text-sm font-medium">Q-Value: {qValue.toFixed(3)}</span>
+        <span class="text-sm font-medium">
+          {#if !isConnected}
+            <span class="text-red-400">Disconnected</span>
+          {:else if $computingStatus}
+            <span class="text-yellow-400">Processing...</span>
+          {:else}
+            <span class="text-green-400">Ready</span>
+          {/if}
+        </span>
       </div>
     </div>
   </div>

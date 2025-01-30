@@ -1,6 +1,6 @@
 <script>
   import { onMount, onDestroy } from "svelte";
-  import { websocketService } from "../services/websocketService";
+  import { websocketService, computingStatus } from "../services/websocketService";
   import { writable } from "svelte/store";
   import LiveFeed from "../components/LiveFeed.svelte";
 
@@ -10,6 +10,8 @@
 
   // Handle WebSocket ready state changes
   let cleanupListener;
+  let cleanupMessageHandler;
+  let statusInterval;
 
   let poseInput = "";
   let poseError = "";
@@ -23,8 +25,30 @@
     weights: [1.0]
   };
 
+  function handleMessage(data) {
+    if (data.type === "debug_model_info") {
+      $isComputing = data.is_computing;
+    }
+    // Handle other message types
+    switch (data.type) {
+      case "parameters":
+      case "parameters_updated":
+        import("../stores/parameterStore").then((module) => {
+          //module.parameterStore.set(data.parameters);
+        });
+        break;
+      case "recording_status":
+        console.log("Recording status update:", data.status);
+        break;
+    }
+  }
+
   function handleReadyState(isReady) {
     $status = isReady ? "Connected" : "Disconnected";
+    if (!isReady) {
+      // Reset computing state when connection is lost
+      $isComputing = false;
+    }
   }
 
   // Test functions
@@ -74,11 +98,9 @@
 
   function checkModelStatus() {
     const socket = websocketService.getSocket();
-    if (!socket) return;
-    
-    socket.send(JSON.stringify({
-      type: "debug_model_info"
-    }));
+    if (socket && $status === "Connected") {
+      socket.send(JSON.stringify({ type: "debug_model_info" }));
+    }
   }
 
   function parsePoseInput(input) {
@@ -153,39 +175,30 @@
     };
   }
 
-  // Extend the handleMessage method in the service
-  websocketService.handleMessage = (data) => {
-    if (data.type === "debug_model_info") {
-      isComputing.set(data.is_computing);
-    }
-    // Keep existing message handling
-    switch (data.type) {
-      case "parameters":
-      case "parameters_updated":
-        import("../stores/parameterStore").then((module) => {
-          //module.parameterStore.set(data.parameters);
-        });
-        break;
-      case "recording_status":
-        console.log("Recording status update:", data.status);
-        break;
-    }
-  };
-
   onMount(() => {
     // Connect WebSocket
     websocketService.connect();
     
-    // Setup ready state listener
+    // Setup ready state listener and message handler
     cleanupListener = websocketService.onReadyStateChange(handleReadyState);
+    cleanupMessageHandler = websocketService.addMessageHandler(handleMessage);
     
-    // Regular status check
-    const statusInterval = setInterval(checkModelStatus, 1000);
-    return () => clearInterval(statusInterval);
+    // Initialize status based on current connection state
+    $status = websocketService.getSocket()?.readyState === WebSocket.OPEN 
+      ? "Connected" 
+      : "Disconnected";
+    
+    // Start status check immediately
+    checkModelStatus();
+    
+    // Set up regular status check
+    statusInterval = setInterval(checkModelStatus, 1000);
   });
 
   onDestroy(() => {
     if (cleanupListener) cleanupListener();
+    if (cleanupMessageHandler) cleanupMessageHandler();
+    if (statusInterval) clearInterval(statusInterval);
   });
 </script>
 
@@ -207,8 +220,8 @@
           </div>
           <div>
             <span class="font-medium">Computing:</span>
-            <span class={$isComputing ? "text-yellow-600" : "text-green-600"}>
-              {$isComputing ? "Processing..." : "Ready"}
+            <span class={$status !== "Connected" ? "text-gray-400" : ($computingStatus ? "text-yellow-600" : "text-green-600")}>
+              {$status !== "Connected" ? "Unavailable" : ($computingStatus ? "Processing..." : "Ready")}
             </span>
           </div>
         </div>

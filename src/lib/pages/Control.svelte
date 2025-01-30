@@ -10,26 +10,20 @@
     import { rewardStore } from '../stores/rewardStore';
     import { websocketService } from '../services/websocketService';
     
-    
-    // Single declaration of isSocketReady state
     let isSocketReady = $state(false);
+    let cleanupListener;
 
     onMount(() => {
-        websocketService.connect();
-        
-        // Update the state value directly
-        isSocketReady = websocketService.isReady;
-        
-        websocketService.onReadyStateChange((ready) => {
-            // Update the state value, not reassign the proxy
+        cleanupListener = websocketService.onReadyStateChange((ready) => {
             isSocketReady = ready;
         });
+        isSocketReady = websocketService.getSocket()?.readyState === WebSocket.OPEN;
     });
     
     onDestroy(() => {
+        if (cleanupListener) cleanupListener();
         parameterStore.disconnect();
         rewardStore.disconnect();
-        websocketService.disconnect();
     });
 </script>
   
