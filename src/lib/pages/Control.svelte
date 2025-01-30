@@ -22,8 +22,6 @@
     
     onDestroy(() => {
         if (cleanupListener) cleanupListener();
-        parameterStore.disconnect();
-        rewardStore.disconnect();
     });
 </script>
   

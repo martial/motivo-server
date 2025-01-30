@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { websocketService } from '../services/websocketService';
   import { writable } from 'svelte/store';
+  import { Link } from "svelte-routing";
 
   export let title = "Liminal Motivo Server";
   
@@ -30,19 +31,10 @@
     <h1 class="text-4xl font-black text-black">
       {title}
     </h1>
-    <div class="flex items-center gap-4">
-      <div class="flex items-center gap-2">
-        <span class="text-sm font-medium text-gray-500">Total Connections:</span>
-        <span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">
-          {$connectedClients}
-        </span>
-      </div>
-      <div class="flex items-center gap-2">
-        <span class="text-sm font-medium text-gray-500">Unique Users:</span>
-        <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
-          {$uniqueClients}
-        </span>
-      </div>
-    </div>
+    <nav class="flex gap-4">
+      <Link to="/" class="hover:text-blue-600">Home</Link>
+      <Link to="/live" class="hover:text-blue-600">Live Feed</Link>
+      <Link to="/control" class="hover:text-blue-600">Control</Link>
+    </nav>
   </div>
 </header> 
