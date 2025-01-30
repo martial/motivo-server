@@ -202,7 +202,7 @@
   });
 </script>
 
-<div class="container mx-auto p-4">
+<div class="p-4">
   <div class="grid md:grid-cols-2 gap-6">
     <!-- Left Column: Controls -->
     <div class="bg-white rounded-lg shadow-lg p-6">

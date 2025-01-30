@@ -80,7 +80,7 @@
           min="0.0001"
           max="0.002"
           step="0.0001"
-          value={parameters.timestep}
+          value={Number(parameters.timestep).toFixed(4)}
           defaultValue={0.0005}
           on:change={handleParameterChange}
         />
