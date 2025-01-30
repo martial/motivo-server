@@ -32,7 +32,6 @@ WORKDIR /app
 RUN pip install uv
 COPY requirements.txt .
 RUN uv pip install -r requirements.txt --system
-RUN uv pip install python-dotenv --system
 COPY scripts /app/scripts
 COPY webserver /app/webserver
 COPY prompt_template.txt /app/prompt_template.txt
