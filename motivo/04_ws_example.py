@@ -13,7 +13,7 @@ from frame_utils import save_frame_data
 from env_setup import setup_environment
 from buffer_utils import download_buffer
 from reward_context import compute_reward_context, compute_q_value
-from custom_rewards import print_model_info, list_model_body_names
+from custom_rewards import print_model_info, list_model_body_names, print_available_rewards
 from humenv import rewards as humenv_rewards
 from typing import Dict, Any
 from frame_utils import FrameRecorder  # Update import to use existing file
@@ -315,6 +315,10 @@ async def main():
     global model, env, buffer_data
     
     try:
+        print("\n=== Available Rewards ===")
+        print_available_rewards()  # Add this line to print all rewards
+        print("\n=== System Setup ===")
+        
         # Device selection with CUDA support
         if torch.cuda.is_available():
             device = "cuda"

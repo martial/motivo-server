@@ -81,57 +81,110 @@ export const REWARD_TYPES = {
   split: {
     distance: { type: "range", default: 1.5, min: 0.5, max: 2.5, step: 0.1 },
   },
-  // Custom Body Part Controls
+  "head-height": {
+    target_height: { type: "range", default: 1.4, min: 0, max: 2.0, step: 0.1 },
+  },
+  "pelvis-height": {
+    target_height: { type: "range", default: 0.8, min: 0, max: 2.0, step: 0.1 },
+  },
+  "hand-height": {
+    target_height: { type: "range", default: 1.8, min: 0, max: 2.0, step: 0.1 },
+  },
+  "hand-lateral": {
+    target_distance: {
+      type: "range",
+      default: 0.5,
+      min: 0,
+      max: 1.0,
+      step: 0.1,
+    },
+  },
   "left-hand-height": {
-    height: { type: "range", default: 1.0, min: 0, max: 2, step: 0.1 },
+    target_height: { type: "range", default: 1.0, min: 0, max: 2.0, step: 0.1 },
   },
   "left-hand-lateral": {
-    position: { type: "range", default: 0, min: -1, max: 1, step: 0.1 },
+    target_distance: {
+      type: "range",
+      default: 0.5,
+      min: -1,
+      max: 1,
+      step: 0.1,
+    },
   },
   "left-hand-forward": {
-    position: { type: "range", default: 0, min: -1, max: 1, step: 0.1 },
+    target_distance: {
+      type: "range",
+      default: 0.5,
+      min: -1,
+      max: 1,
+      step: 0.1,
+    },
   },
   "right-hand-height": {
-    height: { type: "range", default: 1.0, min: 0, max: 2, step: 0.1 },
+    target_height: { type: "range", default: 1.0, min: 0, max: 2.0, step: 0.1 },
   },
   "right-hand-lateral": {
-    position: { type: "range", default: 0, min: -1, max: 1, step: 0.1 },
+    target_distance: {
+      type: "range",
+      default: 0.5,
+      min: -1,
+      max: 1,
+      step: 0.1,
+    },
   },
   "right-hand-forward": {
-    position: { type: "range", default: 0, min: -1, max: 1, step: 0.1 },
+    target_distance: {
+      type: "range",
+      default: 0.5,
+      min: -1,
+      max: 1,
+      step: 0.1,
+    },
   },
   "left-foot-height": {
-    height: { type: "range", default: 0, min: 0, max: 2.0, step: 0.1 },
-  },
-  "right-foot-height": {
-    height: { type: "range", default: 0, min: 0, max: 2.0, step: 0.1 },
+    target_height: { type: "range", default: 0.0, min: 0, max: 2.0, step: 0.1 },
   },
   "left-foot-lateral": {
-    position: { type: "range", default: 0, min: -1, max: 1, step: 0.1 },
-  },
-  "right-foot-lateral": {
-    position: { type: "range", default: 0, min: -1, max: 1, step: 0.1 },
+    target_distance: {
+      type: "range",
+      default: 0.0,
+      min: -1,
+      max: 1,
+      step: 0.1,
+    },
   },
   "left-foot-forward": {
-    position: { type: "range", default: 0, min: -1, max: 2.0, step: 0.1 },
+    target_distance: {
+      type: "range",
+      default: 0.0,
+      min: -1,
+      max: 2.0,
+      step: 0.1,
+    },
+  },
+  "right-foot-height": {
+    target_height: { type: "range", default: 0.0, min: 0, max: 2.0, step: 0.1 },
+  },
+  "right-foot-lateral": {
+    target_distance: {
+      type: "range",
+      default: 0.0,
+      min: -1,
+      max: 1,
+      step: 0.1,
+    },
   },
   "right-foot-forward": {
-    position: { type: "range", default: 0, min: -1, max: 2.0, step: 0.1 },
+    target_distance: {
+      type: "range",
+      default: 0.0,
+      min: -1,
+      max: 2.0,
+      step: 0.1,
+    },
   },
   "stay-upright": {
     strength: { type: "range", default: 1.0, min: 0, max: 2.0, step: 0.1 },
-  },
-  "head-height": {
-    height: { type: "range", default: 1.6, min: 0.2, max: 2, step: 0.1 },
-  },
-  "pelvis-height": {
-    height: { type: "range", default: 1.0, min: 0.2, max: 10.0, step: 0.1 },
-  },
-  "hand-height": {
-    height: { type: "range", default: 1.0, min: 0, max: 2, step: 0.1 },
-  },
-  "hand-lateral": {
-    position: { type: "range", default: 0, min: -1, max: 1, step: 0.1 },
   },
 };
 

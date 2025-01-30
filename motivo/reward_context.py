@@ -20,36 +20,70 @@ from custom_rewards import (
     LeftFootForwardDistanceReward,
     RightFootHeightReward,
     RightFootLateralDistanceReward,
-    RightFootForwardDistanceReward
+    RightFootForwardDistanceReward,
+    print_available_rewards
 )
+import inspect
+import sys
 
 def create_reward_function(reward_type, weight):
-
-    print("create_reward_function")
     """Create a reward function based on config"""
     name = reward_type['name']
     
-    if name == 'raisearms':
-        left = reward_type.get('left', 'l')
-        right = reward_type.get('right', 'l')
-        valid_positions = {'l', 'm', 'h'}
-        if left not in valid_positions or right not in valid_positions:
-            raise ValueError(f"Invalid arm position. Must be one of: {valid_positions}")
-        task_name = f"raisearms-{left}-{right}"
-        return (make_from_name(task_name), weight)
+    # Try to create standard reward first
+    all_rewards = inspect.getmembers(sys.modules["humenv.rewards"], inspect.isclass)
+    for reward_class_name, reward_cls in all_rewards:
+        if not inspect.isabstract(reward_cls):
+            try:
+                reward_obj = reward_cls.reward_from_name(name)
+                if reward_obj is not None:
+                    return (reward_obj, weight)
+            except Exception as e:
+                continue
     
-    elif name.startswith('move-ego-'):
-        return (make_from_name(name), weight)
+    # Handle custom reward types with consistent parameter naming
+    if name == 'head-height':
+        return (HeadHeightReward(target_height=reward_type.get('target_height', 1.4)), weight)
+    elif name == 'pelvis-height':
+        return (PelvisHeightReward(target_height=reward_type.get('target_height', 0.8)), weight)
+    elif name == 'hand-height':
+        return (HandHeightReward(target_height=reward_type.get('target_height', 1.8)), weight)
+    elif name == 'hand-lateral':
+        return (HandLateralDistanceReward(target_distance=reward_type.get('target_distance', 0.5)), weight)
+    elif name == 'left-hand-height':
+        return (LeftHandHeightReward(target_height=reward_type.get('target_height', 1.0)), weight)
+    elif name == 'left-hand-lateral':
+        return (LeftHandLateralDistanceReward(target_distance=reward_type.get('target_distance', 0.5)), weight)
+    elif name == 'left-hand-forward':
+        return (LeftHandForwardDistanceReward(target_distance=reward_type.get('target_distance', 0.5)), weight)
+    elif name == 'right-hand-height':
+        return (RightHandHeightReward(target_height=reward_type.get('target_height', 1.0)), weight)
+    elif name == 'right-hand-lateral':
+        return (RightHandLateralDistanceReward(target_distance=reward_type.get('target_distance', 0.5)), weight)
+    elif name == 'right-hand-forward':
+        return (RightHandForwardDistanceReward(target_distance=reward_type.get('target_distance', 0.5)), weight)
+    elif name == 'left-foot-height':
+        return (LeftFootHeightReward(target_height=reward_type.get('target_height', 0.1)), weight)
+    elif name == 'left-foot-lateral':
+        return (LeftFootLateralDistanceReward(target_distance=reward_type.get('target_distance', 0.2)), weight)
+    elif name == 'left-foot-forward':
+        return (LeftFootForwardDistanceReward(target_distance=reward_type.get('target_distance', 0.2)), weight)
+    elif name == 'right-foot-height':
+        return (RightFootHeightReward(target_height=reward_type.get('target_height', 0.1)), weight)
+    elif name == 'right-foot-lateral':
+        return (RightFootLateralDistanceReward(target_distance=reward_type.get('target_distance', 0.2)), weight)
+    elif name == 'right-foot-forward':
+        return (RightFootForwardDistanceReward(target_distance=reward_type.get('target_distance', 0.2)), weight)
     
-    elif name == 'move-ego':
-        stay_low = reward_type.get('stay_low', False)
+    # Handle configurable rewards that need custom parameters
+    if name == 'move-ego':
         return (humenv_rewards.LocomotionReward(
             move_speed=reward_type.get('move_speed', 2.0),
             stand_height=reward_type.get('stand_height', 1.4),
             move_angle=reward_type.get('move_angle', 0),
             egocentric_target=reward_type.get('egocentric_target', True),
             low_height=reward_type.get('low_height', 0.6),
-            stay_low=stay_low
+            stay_low=reward_type.get('stay_low', False)
         ), weight)
     
     elif name == 'move-and-raise-arms':
@@ -66,134 +100,9 @@ def create_reward_function(reward_type, weight):
             loc_coeff=reward_type.get('loc_coeff', 1.0)
         ), weight)
     
-    elif name == 'jump':
-        return (humenv_rewards.JumpReward(
-            jump_height=reward_type.get('jump_height', 1.6),
-            max_velocity=reward_type.get('max_velocity', 5.0)
-        ), weight)
-    
-    elif name == 'zero':
-        return (humenv_rewards.ZeroReward(), weight)
-    
-    elif name == 'rotation':
-        return (humenv_rewards.RotationReward(
-            axis=reward_type.get('axis', 'x'),
-            target_ang_velocity=reward_type.get('target_ang_velocity', 5.0),
-            stand_pelvis_height=reward_type.get('stand_pelvis_height', 0.8)
-        ), weight)
-    
-    elif name == 'headstand':
-        return (humenv_rewards.HeadstandReward(
-            stand_pelvis_height=reward_type.get('stand_pelvis_height', 0.95)
-        ), weight)
-    
-    elif name == 'crawl':
-        direction = 1 if reward_type.get('direction', 'u') == 'u' else -1
-        return (humenv_rewards.CrawlReward(
-            spine_height=reward_type.get('spine_height', 0.3),
-            move_speed=reward_type.get('move_speed', 1.0),
-            direction=direction
-        ), weight)
-    
-    elif name == 'liedown':
-        return (humenv_rewards.LieDownReward(
-            direction=reward_type.get('direction', 'up')
-        ), weight)
-    
-    elif name == 'sit':
-        return (humenv_rewards.SitOnGroundReward(
-            pelvis_height_th=reward_type.get('pelvis_height_th', 0),
-            constrained_knees=reward_type.get('constrained_knees', False)
-        ), weight)
-    
-    elif name == 'split':
-        return (humenv_rewards.SplitReward(
-            distance=reward_type.get('distance', 1.5)
-        ), weight)
-    
+    # Handle custom reward types not in humenv.rewards
     elif name == 'stay-upright':
         return (StayUprightReward(), weight)
-    
-    elif name == 'head-height':
-        return (HeadHeightReward(
-            target_height=reward_type.get('target_height', 1.4)
-        ), weight)
-    
-    elif name == 'pelvis-height':
-        return (PelvisHeightReward(
-            target_height=reward_type.get('target_height', 0.8)
-        ), weight)
-    
-    elif name == 'hand-height':
-        return (HandHeightReward(
-            target_height=reward_type.get('target_height', 1.8)
-        ), weight)
-    
-    elif name == 'hand-lateral':
-        return (HandLateralDistanceReward(
-            target_distance=reward_type.get('target_distance', 0.5)
-        ), weight)
-    
-    elif name == 'left-hand-height':
-        return (LeftHandHeightReward(
-            target_height=reward_type.get('target_height', 1.0)
-        ), weight)
-    
-    elif name == 'left-hand-lateral':
-        return (LeftHandLateralDistanceReward(
-            target_distance=reward_type.get('target_distance', 0.5)
-        ), weight)
-    
-    elif name == 'left-hand-forward':
-        return (LeftHandForwardDistanceReward(
-            target_distance=reward_type.get('target_distance', 0.5)
-        ), weight)
-    
-    elif name == 'right-hand-height':
-        return (RightHandHeightReward(
-            target_height=reward_type.get('target_height', 1.0)
-        ), weight)
-    
-    elif name == 'right-hand-lateral':
-        return (RightHandLateralDistanceReward(
-            target_distance=reward_type.get('target_distance', 0.5)
-        ), weight)
-    
-    elif name == 'right-hand-forward':
-        return (RightHandForwardDistanceReward(
-            target_distance=reward_type.get('target_distance', 0.5)
-        ), weight)
-    
-    elif name == 'left-foot-height':
-        return (LeftFootHeightReward(
-            target_height=reward_type.get('target_height', 0.1)
-        ), weight)
-    
-    elif name == 'left-foot-lateral':
-        return (LeftFootLateralDistanceReward(
-            target_distance=reward_type.get('target_distance', 0.2)
-        ), weight)
-    
-    elif name == 'left-foot-forward':
-        return (LeftFootForwardDistanceReward(
-            target_distance=reward_type.get('target_distance', 0.2)
-        ), weight)
-    
-    elif name == 'right-foot-height':
-        return (RightFootHeightReward(
-            target_height=reward_type.get('target_height', 0.1)
-        ), weight)
-    
-    elif name == 'right-foot-lateral':
-        return (RightFootLateralDistanceReward(
-            target_distance=reward_type.get('target_distance', 0.2)
-        ), weight)
-    
-    elif name == 'right-foot-forward':
-        return (RightFootForwardDistanceReward(
-            target_distance=reward_type.get('target_distance', 0.2)
-        ), weight)
-    
     else:
         raise ValueError(f"Unknown reward type: {name}")
 
@@ -310,3 +219,46 @@ def compute_q_value(model, observation, z, action=None):
         # Compute Q-value using matrix multiplication
         Q = F @ z_reward.ravel()
         return Q.mean(axis=0).cpu().numpy().item()  # Convert to Python scalar 
+
+def print_available_rewards():
+    """Print all available reward types from both humenv.rewards and custom rewards"""
+    print("\n=== Standard Rewards from humenv.rewards ===")
+    all_rewards = inspect.getmembers(sys.modules["humenv.rewards"], inspect.isclass)
+    for reward_class_name, reward_cls in all_rewards:
+        if not inspect.isabstract(reward_cls):
+            print(f"\n{reward_class_name}:")
+            if hasattr(humenv, 'ALL_TASKS'):
+                # Print predefined tasks for this reward type if available
+                tasks = [task for task in humenv.ALL_TASKS if reward_cls.reward_from_name(task) is not None]
+                if tasks:
+                    print("  Predefined tasks:")
+                    for task in tasks:
+                        print(f"    - {task}")
+    
+    print("\n=== Custom Rewards ===")
+    custom_rewards = [
+        "stay-upright",
+        "head-height (params: target_height)",
+        "pelvis-height (params: target_height)",
+        "hand-height (params: target_height)",
+        "hand-lateral (params: target_distance)",
+        "left-hand-height (params: target_height)",
+        "left-hand-lateral (params: target_distance)",
+        "left-hand-forward (params: target_distance)",
+        "right-hand-height (params: target_height)",
+        "right-hand-lateral (params: target_distance)",
+        "right-hand-forward (params: target_distance)",
+        "left-foot-height (params: target_height)",
+        "left-foot-lateral (params: target_distance)",
+        "left-foot-forward (params: target_distance)",
+        "right-foot-height (params: target_height)",
+        "right-foot-lateral (params: target_distance)",
+        "right-foot-forward (params: target_distance)"
+    ]
+    
+    for reward in custom_rewards:
+        print(f"  - {reward}")
+    
+    print("\n=== Configurable Rewards ===")
+    print("  - move-ego (params: move_speed, stand_height, move_angle, egocentric_target, low_height, stay_low)")
+    print("  - move-and-raise-arms (params: move_speed, move_angle, left_pose, right_pose, stand_height, low_height, stay_low, egocentric_target, arm_coeff, loc_coeff)") 

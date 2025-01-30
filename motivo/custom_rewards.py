@@ -5,6 +5,9 @@ import mujoco
 from typing import Optional
 import dataclasses
 import re
+import inspect
+import sys
+import humenv
 
 '''
 Model Body Names:
@@ -51,6 +54,49 @@ def print_model_info(model: mujoco.MjModel, data: mujoco.MjData):
     for name in body_names:
         print(f"- {name}")
 
+def print_available_rewards():
+    """Print all available reward types from both humenv.rewards and custom rewards"""
+    print("\n=== Standard Rewards from humenv.rewards ===")
+    all_rewards = inspect.getmembers(sys.modules["humenv.rewards"], inspect.isclass)
+    for reward_class_name, reward_cls in all_rewards:
+        if not inspect.isabstract(reward_cls):
+            print(f"\n{reward_class_name}:")
+            if hasattr(humenv, 'ALL_TASKS'):
+                # Print predefined tasks for this reward type if available
+                tasks = [task for task in humenv.ALL_TASKS if reward_cls.reward_from_name(task) is not None]
+                if tasks:
+                    print("  Predefined tasks:")
+                    for task in tasks:
+                        print(f"    - {task}")
+    
+    print("\n=== Custom Rewards ===")
+    custom_rewards = [
+        "stay-upright",
+        "head-height (params: target_height)",
+        "pelvis-height (params: target_height)",
+        "hand-height (params: target_height)",
+        "hand-lateral (params: target_distance)",
+        "left-hand-height (params: target_height)",
+        "left-hand-lateral (params: target_distance)",
+        "left-hand-forward (params: target_distance)",
+        "right-hand-height (params: target_height)",
+        "right-hand-lateral (params: target_distance)",
+        "right-hand-forward (params: target_distance)",
+        "left-foot-height (params: target_height)",
+        "left-foot-lateral (params: target_distance)",
+        "left-foot-forward (params: target_distance)",
+        "right-foot-height (params: target_height)",
+        "right-foot-lateral (params: target_distance)",
+        "right-foot-forward (params: target_distance)"
+    ]
+    
+    for reward in custom_rewards:
+        print(f"  - {reward}")
+    
+    print("\n=== Configurable Rewards ===")
+    print("  - move-ego (params: move_speed, stand_height, move_angle, egocentric_target, low_height, stay_low)")
+    print("  - move-and-raise-arms (params: move_speed, move_angle, left_pose, right_pose, stand_height, low_height, stay_low, egocentric_target, arm_coeff, loc_coeff)")
+
 @dataclasses.dataclass
 class StayUprightReward(humenv_rewards.RewardFunction):
     def compute(
@@ -83,13 +129,15 @@ class HeadHeightReward(humenv_rewards.RewardFunction):
         data: mujoco.MjData,
     ) -> float:
         head_height = get_xpos(model, data, name="Head")[-1]
+        print(f"Head height: {head_height}, Target: {self.target_height}")
         return rewards.tolerance(
             head_height,
-            bounds=(self.target_height - 0.1, self.target_height + 0.1),
+            bounds=(self.target_height - 0.5, self.target_height + 0.5),
             margin=0.2,
             value_at_margin=0.01,
             sigmoid="linear",
         )
+    
 
     @staticmethod
     def reward_from_name(name: str) -> Optional["humenv_rewards.RewardFunction"]:
@@ -164,12 +212,12 @@ class HandHeightReward(humenv_rewards.RewardFunction):
         hand_height = get_xpos(model, data, name="L_Hand")[-1]
         return rewards.tolerance(
             hand_height,
-            bounds=(self.target_height - 0.1, self.target_height + 0.1),
+            bounds=(self.target_height - 0.5, self.target_height + 0.5),
             margin=0.2,
             value_at_margin=0.01,
             sigmoid="linear",
         )
-
+ 
     @staticmethod
     def reward_from_name(name: str) -> Optional["humenv_rewards.RewardFunction"]:
         pattern = r"^hand-height-(\d+\.*\d*)$"

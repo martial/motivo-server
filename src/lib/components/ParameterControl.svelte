@@ -4,13 +4,35 @@
 
   export let name;
   export let label;
-  export let type = 'range';  // Now supports 'range', 'select', and 'checkbox'
+  export let type = 'range';  // 'range', 'select', or 'checkbox'
   export let min = 0;
   export let max = 100;
   export let step = 1;
   export let options = undefined;
-  export let value; // Accept value from parent
-  export let defaultValue = undefined; // Add default value prop
+  export let value;
+  export let defaultValue = undefined;
+
+  // Define parameter ranges based on type
+  const parameterRanges = {
+    'target_height': { min: 0, max: 2.0, step: 0.1, default: 1.4 },
+    'target_distance': { min: 0, max: 1.0, step: 0.1, default: 0.5 },
+    // Add other parameter types as needed
+  };
+
+  // Set ranges based on parameter name if available
+  $: if (name in parameterRanges) {
+    min = parameterRanges[name].min;
+    max = parameterRanges[name].max;
+    step = parameterRanges[name].step;
+    if (defaultValue === undefined) {
+      defaultValue = parameterRanges[name].default;
+    }
+  }
+
+  // Initialize value with default if not set
+  $: if (value === undefined && defaultValue !== undefined) {
+    value = defaultValue;
+  }
 
   function handleInput(event) {
     let newValue;
@@ -18,7 +40,6 @@
       newValue = event.target.value === '' ? null : event.target.value;
     } else if (type === 'range') {
       newValue = parseFloat(event.target.value);
-      // Update the bound value immediately for range inputs
       value = newValue;
     } else if (type === 'checkbox') {
       newValue = event.target.checked;
@@ -27,7 +48,6 @@
     
     if (newValue !== undefined) {
       console.log(`ParameterControl ${name} value changed to:`, newValue);
-      // Dispatch both name and value
       dispatch('change', {
         name,
         value: newValue
@@ -43,7 +63,7 @@
     </label>
     {#if type !== 'checkbox'}
       <span class="text-sm font-medium text-gray-600">
-        {value}
+        {value?.toFixed?.(2) ?? value}
       </span>
     {/if}
   </div>
