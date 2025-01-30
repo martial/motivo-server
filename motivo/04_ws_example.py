@@ -71,7 +71,122 @@ async def handle_websocket(websocket):
                 message_type = data.get("type", "")
                 print(f"Received message type: {message_type}")
 
-                if message_type == "debug_model_info":
+                # Add handler for mixed pose and reward
+                if message_type == "mix_pose_reward":
+                    try:
+                        print("\nMixing pose and reward behaviors...")
+                        goal_qpos = np.array(data.get("pose", []))
+                        reward_config = data.get("reward", {})
+                        mix_weight = data.get("mix_weight", 0.5)  # 0 = all pose, 1 = all reward
+                        
+                        # Get pose-based context
+                        if len(goal_qpos) != 76:
+                            raise ValueError(f"Invalid pose length: {len(goal_qpos)}, expected 76")
+                        
+                        env.unwrapped.set_physics(
+                            qpos=goal_qpos,
+                            qvel=np.zeros(75)
+                        )
+                        
+                        goal_obs = torch.tensor(
+                            env.unwrapped.get_obs()["proprio"].reshape(1, -1),
+                            device=model.cfg.device,
+                            dtype=torch.float32
+                        )
+                        
+                        pose_z = model.goal_inference(next_obs=goal_obs)
+                        
+                        # Get reward-based context
+                        reward_z = await get_reward_context(reward_config)
+                        
+                        # Interpolate between contexts
+                        current_z = (1 - mix_weight) * pose_z + mix_weight * reward_z
+                        
+                        response = {
+                            "type": "mix_updated",
+                            "status": "success",
+                            "mix_weight": mix_weight,
+                            "timestamp": datetime.now().isoformat()
+                        }
+                        await websocket.send(json.dumps(response))
+                        
+                    except Exception as e:
+                        error_msg = f"Error mixing behaviors: {str(e)}"
+                        print(error_msg)
+                        import traceback
+                        traceback.print_exc()
+                        
+                        response = {
+                            "type": "mix_updated",
+                            "status": "error",
+                            "error": error_msg,
+                            "timestamp": datetime.now().isoformat()
+                        }
+                        await websocket.send(json.dumps(response))
+
+                elif message_type == "load_pose":
+                    try:
+                        print("\nLoading pose configuration...")
+                        goal_qpos = np.array(data.get("pose", []))
+                        print(f"Received pose array length: {len(goal_qpos)}")
+                        print(f"First few values: {goal_qpos[:5]}")
+                        
+                        if len(goal_qpos) != 76:  # Expect 76 values for qpos
+                            raise ValueError(f"Invalid pose length: {len(goal_qpos)}, expected 76")
+                        
+                        # Reset environment with new pose
+                        print("Setting physics...")
+                        env.unwrapped.set_physics(
+                            qpos=goal_qpos,  # Use all 76 values for qpos
+                            qvel=np.zeros(75)  # Use 75 zeros for qvel
+                        )
+                        
+                        print("Getting observation...")
+                        goal_obs = torch.tensor(
+                            env.unwrapped.get_obs()["proprio"].reshape(1, -1),
+                            device=model.cfg.device,
+                            dtype=torch.float32
+                        )
+                        print(f"Observation shape: {goal_obs.shape}")
+                        
+                        # Use goal inference to get context
+                        inference_type = data.get("inference_type", "goal")
+                        print(f"Using inference type: {inference_type}")
+                        
+                        if inference_type == "goal":
+                            z = model.goal_inference(next_obs=goal_obs)
+                        elif inference_type == "tracking":
+                            z = model.tracking_inference(next_obs=goal_obs)
+                        else:  # context
+                            z = model.context_inference(goal_obs)
+                        
+                        # Update current context
+                        current_z = z
+                        print("Context updated successfully")
+                        
+                        response = {
+                            "type": "pose_loaded",
+                            "status": "success",
+                            "timestamp": datetime.now().isoformat()
+                        }
+                        await websocket.send(json.dumps(response))
+                        print("Success response sent")
+                        
+                    except Exception as e:
+                        error_msg = f"Error loading pose: {str(e)}"
+                        print(error_msg)
+                        import traceback
+                        traceback.print_exc()
+                        
+                        response = {
+                            "type": "pose_loaded",
+                            "status": "error",
+                            "error": error_msg,
+                            "timestamp": datetime.now().isoformat()
+                        }
+                        await websocket.send(json.dumps(response))
+
+                elif message_type == "debug_model_info":
                     response = {
                         "type": "debug_model_info",
                         "is_computing": is_computing_reward
@@ -283,7 +398,7 @@ async def run_simulation():
                     qvel=env_data.qvel.copy(),
                     env=env  # Pass the environment instance
                 )
-                print("Frame saved! 📸")
+                print("Frame saved! ��")
                 
             except Exception as e:
                 print("Error during frame save:", str(e))
