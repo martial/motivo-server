@@ -109,5 +109,18 @@ def generate_reward():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
+@app.route('/downloads/<path:filename>')
+def download_file(filename):
+    """Serve files from the downloads directory"""
+    try:
+        # Look in motivo/downloads directory
+        downloads_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../motivo/downloads'))
+        print(f"Looking for file in: {downloads_dir}")  # Debug print
+        os.makedirs(downloads_dir, exist_ok=True)
+        return send_from_directory(downloads_dir, filename)
+    except Exception as e:
+        print(f"Error serving download file: {str(e)}")
+        return jsonify({'error': str(e)}), 404
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5002, debug=True)

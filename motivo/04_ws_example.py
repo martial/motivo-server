@@ -9,7 +9,7 @@ import os
 from datetime import datetime
 import numpy as np
 from frame_utils import save_frame_data
-from smpl_utils import qpos_to_smpl  # Add this import
+from smpl_utils import qpos_to_smpl  
 
 from env_setup import setup_environment
 from buffer_utils import download_buffer
@@ -24,6 +24,7 @@ from frame_utils import FrameRecorder  # Update import to use existing file
 BACKEND_DOMAIN = os.getenv("VITE_BACKEND_DOMAIN", "localhost")
 WS_PORT = os.getenv("VITE_WS_PORT", 8765)
 API_PORT = os.getenv("VITE_API_PORT", 5000)
+WEBSERVER_PORT = os.getenv("VITE_WEBSERVER_PORT", 5002)
 
 # Global variables
 model = None
@@ -70,7 +71,7 @@ async def handle_websocket(websocket):
             try:
                 data = json.loads(message)
                 message_type = data.get("type", "")
-                print(f"Received message type: {message_type}")
+                #1print(f"Received message type: {message_type}")
 
                 # Add handler for mixed pose and reward
                 if message_type == "mix_pose_reward":
@@ -293,22 +294,48 @@ async def handle_websocket(websocket):
                     if frame_recorder and frame_recorder.recording:
                         try:
                             print(f"Frames recorded: {len(frame_recorder.frames)}")
-                            frame_recorder.end_record()  # Save the recording
+                            
+                            # Create a unique filename for the zip
+                            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                            zip_filename = f"recording_{timestamp}.zip"
+                            
+                            # Use path relative to motivo directory
+                            downloads_dir = os.path.join(os.path.dirname(__file__), 'downloads')
+                            zip_path = os.path.join(downloads_dir, zip_filename)
+                            
+                            # Ensure downloads directory exists
+                            os.makedirs(downloads_dir, exist_ok=True)
+                            print(f"Saving recording to: {zip_path}")
+                            
+                            # Save the recording and get the zip path
+                            frame_recorder.end_record(zip_path)
+                            
+                            # Create download URL using WEBSERVER_PORT
+                            download_url = f"http://{BACKEND_DOMAIN}:{WEBSERVER_PORT}/downloads/{zip_filename}"
+                            print(f"Download URL created: {download_url}")
+                            
                             response = {
                                 "type": "recording_status",
                                 "status": "stopped",
+                                "downloadUrl": download_url,
                                 "timestamp": datetime.now().isoformat()
                             }
+                            print(f"Sending response: {response}")
                             await websocket.send(json.dumps(response))
-                            frame_recorder = None  # Clear the recorder after saving
+                            frame_recorder = None
                         except Exception as e:
                             print(f"Error stopping recording: {str(e)}")
                             import traceback
                             traceback.print_exc()
-                    else:
-                        print("No active recording to stop")
-                        print("frame_recorder:", frame_recorder)
-                        print("recording state:", frame_recorder.recording if frame_recorder else None)
+                            
+                            # Send error response to client
+                            error_response = {
+                                "type": "recording_status",
+                                "status": "error",
+                                "error": str(e),
+                                "timestamp": datetime.now().isoformat()
+                            }
+                            await websocket.send(json.dumps(error_response))
                 
             except json.JSONDecodeError:
                 print("Error: Invalid JSON message")
@@ -413,7 +440,7 @@ async def run_simulation():
         # Update recording logic - moved after frame rendering
         if frame_recorder and frame_recorder.recording:
             try:
-                #print("Recording frame...")  # Debug log
+                print("Recording frame...")  # Debug log
                 frame_recorder.record_frame_data(
                     frame=frame.copy(),  # Make a copy of the frame
                     qpos=env.unwrapped.data.qpos.copy(),
