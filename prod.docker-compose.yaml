@@ -26,7 +26,16 @@ services:
     ports:
       - "5000:5000"
     restart: unless-stopped
-    shm_size: '16gb'  # Shared memory size
+    shm_size: '16gb'
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      # Disable GUI and use headless mode
+      - DISPLAY=:99
+      - DEBIAN_FRONTEND=noninteractive
+      - PYTHONUNBUFFERED=1
+      # Force CPU rendering for EGL
+      - LIBGL_ALWAYS_SOFTWARE=1
     deploy:
       resources:
         reservations:
@@ -50,11 +59,11 @@ services:
       - "com.centurylinklabs.watchtower.enable=true"
 
   watchtower:
-    image: containrrr/watchtower
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    command: --interval 30 --cleanup --remove-volumes
-    environment:
-      - WATCHTOWER_CLEANUP=true
-    #  - WATCHTOWER_REMOVE_VOLUMES=true
-    restart: unless-stopped
+      image: containrrr/watchtower
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+      command: --interval 30 --cleanup --remove-volumes --stop-timeout 10s
+      environment:
+        - WATCHTOWER_CLEANUP=true
+        - WATCHTOWER_STOP_TIMEOUT=10s  # Forces container stop after 10 seconds
+      restart: unless-stopped

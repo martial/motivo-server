@@ -1,6 +1,6 @@
 echo "Starting server ..."
-docker compose down -f prod.docker-compose.yml
+docker compose -f prod.docker-compose.yaml down
 docker compose pull
-docker compose up -d -f prod.docker-compose.yml
+docker compose -f prod.docker-compose.yaml up  -d 
 echo "Server started"
 

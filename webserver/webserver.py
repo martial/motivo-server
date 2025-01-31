@@ -25,7 +25,7 @@ load_dotenv()
 VITE_API_URL = os.getenv('VITE_API_URL') or 'localhost'
 VITE_API_PORT = os.getenv('VITE_API_PORT') or 5002
 VITE_VIBE_URL = os.getenv('VITE_VIBE_URL') or 5000
-ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
+ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY' or "")
 
 if not ANTHROPIC_API_KEY:
     raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
@@ -36,7 +36,7 @@ try:
     print("Successfully initialized Anthropic client")
 except Exception as e:
     print(f"Error initializing Anthropic client: {str(e)}")
-    raise
+    
 
 # Add these configurations after app initialization
 UPLOAD_FOLDER = 'uploads'

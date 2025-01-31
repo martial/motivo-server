@@ -1,3 +1,3 @@
 echo "stopping server ..."
-docker compose down -f prod.docker-compose.yml
+docker compose -f prod.docker-compose.yaml down 
 echo "server stopped"

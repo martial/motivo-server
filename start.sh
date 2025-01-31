@@ -61,4 +61,4 @@ sleep 5
 python webserver/webserver.py &
 
 # Start WebSocket server
-python motivo/04_ws_example.py
+python motivo/main.py
