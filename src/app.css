@@ -48,4 +48,9 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Global button styles */
+button {
+  cursor: pointer;
+}
+
 /* Remove conflicting styles */

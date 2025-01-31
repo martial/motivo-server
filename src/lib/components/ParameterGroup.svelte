@@ -1,18 +1,13 @@
 <script>
-  export let title = '';
-  export let layout = 'grid'; // 'grid' or 'stack'
-  export let columns = 2;
+  export let title = undefined;
+  export let columns = 1;
 </script>
 
-<div class="bg-gray-50 p-2 rounded-lg space-y-2">
+<div class="mb-4">
   {#if title}
-    <h2 class="text-xs font-semibold text-gray-700">{title}</h2>
+    <h3 class="text-sm font-medium text-gray-700 mb-3">{title}</h3>
   {/if}
-  
-  <div class={layout === 'grid' ? 
-    `grid grid-cols-${columns} gap-2` : 
-    'space-y-2'
-  }>
+  <div class="grid grid-cols-{columns} gap-x-8 gap-y-2">
     <slot />
   </div>
 </div> 

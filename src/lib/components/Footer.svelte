@@ -6,6 +6,7 @@
   const connectedClients = writable(0);
   const uniqueClients = writable(0);
   let cleanupMessageHandler;
+  let intervalId;
 
   function handleMessage(data) {
     if (data.type === "debug_model_info") {
@@ -14,12 +15,25 @@
     }
   }
 
+  function requestDebugInfo() {
+    websocketService.send({
+      type: "debug_model_info"
+    });
+  }
+
   onMount(() => {
     cleanupMessageHandler = websocketService.addMessageHandler(handleMessage);
+    
+    // Request initial debug info
+    requestDebugInfo();
+    
+    // Set up periodic updates every 5 seconds
+    intervalId = setInterval(requestDebugInfo, 5000);
   });
 
   onDestroy(() => {
     if (cleanupMessageHandler) cleanupMessageHandler();
+    if (intervalId) clearInterval(intervalId);
   });
 </script>
 

@@ -1,5 +1,6 @@
 <script>
   import { parameterStore } from '../stores/parameterStore';
+  import { websocketService } from '../services/websocketService';
   import ParameterControl from './ParameterControl.svelte';
   import ParameterGroup from './ParameterGroup.svelte';
 
@@ -9,6 +10,13 @@
   function handleParameterChange(event) {
     const { name, value } = event.detail;
     parameterStore.updateParameter(name, value);
+  }
+
+  function resetSimulation() {
+    const socket = websocketService.getSocket();
+    if (socket) {
+      socket.send(JSON.stringify({ type: "clean_rewards" }));
+    }
   }
 </script>
 
@@ -86,13 +94,20 @@
         />
       </ParameterGroup>
 
-
-      <button 
-        on:click={() => parameterStore.reset()}
-        class="w-full bg-gray-600 text-white px-3 py-1 text-sm rounded hover:bg-gray-700 transition-colors"
-      >
-        Reset to Defaults
-      </button>
+      <div class="flex gap-2">
+        <button 
+          on:click={() => parameterStore.reset()}
+          class="flex-1 bg-gray-600 text-white px-3 py-2 text-sm rounded hover:bg-gray-700 transition-colors"
+        >
+          Reset Parameters
+        </button>
+        <button
+          class="flex-1 bg-blue-500 text-white px-3 py-2 text-sm rounded hover:bg-blue-600 disabled:opacity-50"
+          on:click={resetSimulation}
+        >
+          Reset Simulation
+        </button>
+      </div>
     </div>
   </div>
 </div> 

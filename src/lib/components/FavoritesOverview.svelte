@@ -56,7 +56,7 @@
   }
 </script>
 
-<div class="bg-white rounded-lg shadow-lg p-4 mt-8">
+<div class="bg-white rounded-lg shadow-lg p-4 ">
   <div class="flex justify-between items-center mb-4">
     <h2 class="text-lg font-bold text-gray-800">Saved Configurations</h2>
     <div class="flex gap-2">

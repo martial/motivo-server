@@ -22,6 +22,7 @@ from cache_utils import RewardContextCache
 from ws_manager import WebSocketManager
 from utils import normalize_q_value
 from display_utils import DisplayManager
+import traceback  # Add this at the top with other imports
 
 
 # import from env BACKEND_DOMAIN
@@ -36,7 +37,7 @@ env = None
 buffer_data = None
 active_contexts = {}  # Store computed contexts
 current_z = None     # Current active context
-thread_pool = ThreadPoolExecutor(max_workers=1)  # Increased from 1 to 2
+thread_pool = ThreadPoolExecutor(max_workers=2)  # Increased from 1 to 2
 is_computing_reward = False  # New flag to track reward computation status
 frame_recorder = None  # Add this line
 ws_manager = WebSocketManager()  # Replace connected_clients and unique_clients sets
@@ -128,7 +129,6 @@ async def handle_websocket(websocket):
                     except Exception as e:
                         error_msg = f"Error mixing behaviors: {str(e)}"
                         print(error_msg)
-                        import traceback
                         traceback.print_exc()
                         
                         response = {
@@ -190,7 +190,6 @@ async def handle_websocket(websocket):
                     except Exception as e:
                         error_msg = f"Error loading pose: {str(e)}"
                         print(error_msg)
-                        import traceback
                         traceback.print_exc()
                         
                         response = {
@@ -206,6 +205,7 @@ async def handle_websocket(websocket):
                     response = {
                         "type": "debug_model_info",
                         "is_computing": is_computing_reward,
+                        "active_rewards": active_rewards,
                         **stats
                     }
                     await ws_manager.broadcast(response)
@@ -213,8 +213,7 @@ async def handle_websocket(websocket):
                 elif message_type == "request_reward":
                     print("\n=== Processing Reward Combination ===")
                     
-                    # Clear active rewards first
-                    global active_rewards
+                    # Update active rewards
                     active_rewards = data['reward']
                     
                     current_z = await context_cache.get_cached_context(active_rewards, get_reward_context)
@@ -331,7 +330,6 @@ async def handle_websocket(websocket):
                             frame_recorder = None
                         except Exception as e:
                             print(f"Error stopping recording: {str(e)}")
-                            import traceback
                             traceback.print_exc()
                             
                             # Send error response to client
@@ -342,6 +340,74 @@ async def handle_websocket(websocket):
                                 "timestamp": datetime.now().isoformat()
                             }
                             await websocket.send(json.dumps(error_response))
+                
+                elif message_type == "update_reward":
+                    try:
+                        reward_index = data.get("index")
+                        new_parameters = data.get("parameters")
+                        
+                        print("\n=== Processing Reward Update ===")
+                        print(f"Reward Index: {reward_index}")
+                        print(f"Incoming parameters: {json.dumps(new_parameters, indent=2)}")
+                        
+                        if active_rewards and 'rewards' in active_rewards:
+                            print("\nCurrent active rewards before update:")
+                            print(json.dumps(active_rewards, indent=2))
+                            
+                            # Convert string numbers to float for numeric parameters
+                            for key, value in new_parameters.items():
+                                try:
+                                    if isinstance(value, (list, tuple)):
+                                        print(f"Converting sequence {key}: {value} to float")
+                                        new_parameters[key] = float(value[0])
+                                    elif isinstance(value, str):
+                                        print(f"Converting string {key}: {value} to float")
+                                        new_parameters[key] = float(value)
+                                    elif isinstance(value, bool):
+                                        print(f"Keeping boolean {key}: {value}")
+                                        continue
+                                    else:
+                                        print(f"Converting {key}: {value} ({type(value)}) to float")
+                                        new_parameters[key] = float(value)
+                                except (ValueError, TypeError) as e:
+                                    print(f"⚠️ Warning: Could not convert {key}={value}: {str(e)}")
+                                    continue
+                            
+                            print(f"\nConverted parameters: {json.dumps(new_parameters, indent=2)}")
+                            
+                            # Update the specific reward's parameters
+                            active_rewards['rewards'][reward_index].update(new_parameters)
+                            
+                            print("\nActive rewards after update:")
+                            print(json.dumps(active_rewards, indent=2))
+                            
+                            print("\nRecomputing context...")
+                            current_z = await context_cache.get_cached_context(active_rewards, get_reward_context)
+                            print("Context recomputed ✅")
+                            
+                            response = {
+                                "type": "reward_updated",
+                                "status": "success",
+                                "active_rewards": active_rewards,
+                                "timestamp": datetime.now().isoformat()
+                            }
+                            await websocket.send(json.dumps(response))
+                            print("\n✅ Update successful - Response sent")
+                            
+                    except Exception as e:
+                        error_msg = f"❌ Error updating reward: {str(e)}"
+                        print("\n=== Error Details ===")
+                        print(error_msg)
+                        traceback.print_exc()
+                        print("===================")
+                        
+                        response = {
+                            "type": "reward_updated",
+                            "status": "error",
+                            "error": error_msg,
+                            "timestamp": datetime.now().isoformat()
+                        }
+                        await websocket.send(json.dumps(response))
                 
             except json.JSONDecodeError:
                 print("Error: Invalid JSON message")

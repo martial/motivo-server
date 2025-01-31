@@ -76,7 +76,7 @@ async def run_reward_tests():
                 {
                     "rewards": [{"name": "stay-upright"}],
                     "weights": [1.0],
-                    "combination_type": "multiplicative"
+                    "combinationType": "multiplicative"
                 },
                 "StayUprightReward Test"
             )
@@ -101,7 +101,7 @@ async def run_reward_tests():
                                 {"name": reward_name, "target_height": height}
                             ],
                             "weights": [1.0],
-                            "combination_type": "multiplicative"
+                            "combinationType": "multiplicative"
                         },
                         f"{reward_name} Test (height: {height}m)"
                     )
@@ -128,7 +128,7 @@ async def run_reward_tests():
                                 {"name": reward_name, target_key: distance}
                             ],
                             "weights": [1.0],
-                            "combination_type": "multiplicative"
+                            "combinationType": "multiplicative"
                         },
                         f"{reward_name} Test (distance: {distance}m)"
                     )

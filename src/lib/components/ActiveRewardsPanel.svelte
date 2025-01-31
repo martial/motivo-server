@@ -1,90 +1,160 @@
 <script>
-  import { rewardStore, COMBINATION_TYPES } from '../stores/rewardStore';
+  import { onMount, onDestroy } from 'svelte';
+  import { websocketService } from '../services/websocketService';
+  import { fade } from 'svelte/transition';
+  import { REWARD_TYPES } from '../stores/rewardStore';
+  import ParameterControl from './ParameterControl.svelte';
+  import ParameterGroup from './ParameterGroup.svelte';
 
-  // Initialize display weights from store and ensure they're numbers
-  let displayWeights = $rewardStore.weights.map(w => Number(w) || 0);
+  let activeRewards = $state(null);
+  let pendingChanges = $state({});
+  let cleanupHandler;
 
-  // Subscribe to store changes to keep display weights in sync
-  $: {
-    displayWeights = $rewardStore.weights.map(w => Number(w) || 0);
+  onMount(() => {
+    cleanupHandler = websocketService.addMessageHandler((data) => {
+      if (data.type === 'debug_model_info' && data.active_rewards) {
+        activeRewards = data.active_rewards;
+      }
+    });
+
+    // Request initial state
+    websocketService.send({
+      type: "debug_model_info"
+    });
+  });
+
+  onDestroy(() => {
+    if (cleanupHandler) cleanupHandler();
+  });
+
+  function handleParameterChange(rewardIndex, event) {
+    const { name, value } = event.detail;
+    if (!pendingChanges[rewardIndex]) {
+      pendingChanges[rewardIndex] = {};
+    }
+    pendingChanges[rewardIndex][name] = value;
   }
 
-  // Debounce function
-  function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-      const later = () => {
-        clearTimeout(timeout);
-        func(...args);
-      };
-      clearTimeout(timeout);
-      timeout = setTimeout(later, wait);
+  function updateReward(rewardIndex) {
+    if (!activeRewards || !pendingChanges[rewardIndex]) return;
+    websocketService.updateReward(rewardIndex, pendingChanges[rewardIndex]);
+    delete pendingChanges[rewardIndex];
+  }
+
+  function removeReward(rewardIndex) {
+    if (!activeRewards) return;
+    const updatedRewards = {
+      ...activeRewards,
+      rewards: activeRewards.rewards.filter((_, idx) => idx !== rewardIndex),
+      weights: activeRewards.weights.filter((_, idx) => idx !== rewardIndex)
     };
-  }
-
-  const debouncedUpdateWeight = debounce((index, value) => {
-    rewardStore.updateWeight(index, value);
-  }, 300);
-
-  function handleWeightChange(index, value) {
-    const numericValue = Number(value) || 0;
-    displayWeights[index] = numericValue;
-    displayWeights = [...displayWeights];
-    debouncedUpdateWeight(index, numericValue);
+    websocketService.getSocket()?.send(JSON.stringify({
+      type: 'request_reward',
+      reward: updatedRewards,
+      timestamp: new Date().toISOString()
+    }));
   }
 </script>
 
-<div class="w-96 py-4">
-  <div class="bg-white rounded-lg shadow-lg p-4">
+<div class="h-full w-full">
+  <div class="bg-white rounded-lg shadow-lg p-4 h-full">
     <h1 class="text-lg font-bold mb-4 text-gray-800">Active Rewards</h1>
     
-    {#if $rewardStore.activeRewards.length > 0}
-      <div class="mb-4">
-        {#each $rewardStore.activeRewards as reward, i}
-          <div class="flex items-center gap-2 mb-2 bg-gray-50 p-2 rounded">
-            <div class="flex-grow">
-              <div class="text-sm font-medium">{reward.name}</div>
-              <div class="text-xs text-gray-500">
-                Weight: 
-                <input 
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  value={displayWeights[i]}
-                  on:input={(e) => handleWeightChange(i, parseFloat(e.target.value))}
-                  class="w-24 inline-block"
-                />
-                {(displayWeights[i] * 100).toFixed(0)}%
+    {#if activeRewards}
+      <div class="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-4 auto-rows-min">
+        {#each activeRewards.rewards as reward, rewardIndex}
+          <div class="border rounded-md p-4 bg-white flex flex-col min-h-[200px]" transition:fade>
+            <!-- Header - Single row with name and weight -->
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-xl font-bold text-blue-500 font-display tracking-wide">
+                {reward.name}
+              </h3>
+              <div class="flex items-center gap-2 w-1/2">
+                <span class="text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap">
+                  Weight
+                </span>
+                <div class="flex-1 min-w-[120px]">
+                  <ParameterControl
+                    name="weight"
+                    label={""}
+                    type="range"
+                    value={activeRewards.weights[rewardIndex] * 100}
+                    min={0}
+                    max={100}
+                    step={1}
+                    on:change={(e) => {
+                      const newEvent = {
+                        detail: {
+                          name: 'weight',
+                          value: e.detail.value / 100
+                        }
+                      };
+                      handleParameterChange(rewardIndex, newEvent);
+                    }}
+                  />
+                </div>
               </div>
             </div>
-            <button
-              on:click={() => rewardStore.removeReward(i)}
-              class="text-red-500 hover:text-red-700"
-            >
-              ×
-            </button>
+
+            <!-- Divider -->
+            <div class="h-px bg-gray-200 -mx-4 mb-4"></div>
+
+            <!-- Parameters - More compact grid -->
+            <div class="space-y-4 flex-1">
+              <ParameterGroup columns={2}>
+                {#each Object.entries(reward).filter(([key]) => !['id', 'name'].includes(key)) as [param, value]}
+                  {#if REWARD_TYPES[reward.name]?.[param]}
+                    <ParameterControl
+                      name={param}
+                      label={param.replace(/_/g, ' ')}
+                      type={REWARD_TYPES[reward.name][param].type}
+                      min={REWARD_TYPES[reward.name][param].min}
+                      max={REWARD_TYPES[reward.name][param].max}
+                      step={REWARD_TYPES[reward.name][param].step}
+                      options={REWARD_TYPES[reward.name][param].options?.map(opt => ({ value: opt, label: opt }))}
+                      value={value}
+                      on:change={(e) => handleParameterChange(rewardIndex, e)}
+                    />
+                  {/if}
+                {/each}
+              </ParameterGroup>
+            </div>
+
+            <!-- Action buttons - More compact -->
+            <div class="flex justify-end gap-2 mt-auto pt-3">
+              <button 
+                class="bg-blue-500 text-white px-3 py-1 text-xs font-medium rounded-md hover:bg-blue-600 transition-colors"
+                on:click={() => updateReward(rewardIndex)}
+              >
+                Update
+              </button>
+              <button 
+                class="bg-red-50 text-red-600 px-3 py-1 text-xs font-medium rounded-md hover:bg-red-100 transition-colors"
+                on:click={() => removeReward(rewardIndex)}
+              >
+                Remove
+              </button>
+            </div>
           </div>
         {/each}
 
-        <select
-          bind:value={$rewardStore.combination_type}
-          class="mt-2 block w-full text-sm rounded-md border-0 py-2 pl-3 pr-12 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-blue-600 bg-white shadow-sm appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[position:right_0.5rem_center] bg-[length:1.5em_1.5em] bg-no-repeat"
-        >
-          {#each COMBINATION_TYPES as type}
-            <option value={type}>{type}</option>
-          {/each}
-        </select>
-
-        <button
-          on:click={() => rewardStore.cleanRewards()}
-          class="mt-2 w-full bg-red-600 text-white px-3 py-1 text-sm rounded hover:bg-red-700"
-        >
-          Clear All Rewards
-        </button>
+        <div class="text-sm text-gray-600 col-span-full">
+          Combination Type: {activeRewards.combinationType}
+        </div>
       </div>
     {:else}
-      <div class="text-sm text-gray-500 italic">No active rewards</div>
+      <p class="text-sm text-gray-500 italic">No active rewards</p>
     {/if}
   </div>
-</div> 
+</div>
+
+<style lang="postcss">
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+</style> 

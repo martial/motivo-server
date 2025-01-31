@@ -35,7 +35,7 @@ class WebSocketService {
       clearInterval(this.statusInterval);
     }
 
-    // Start new status check
+    // Start new status check with shorter interval (e.g., every second)
     this.checkModelStatus();
     this.statusInterval = setInterval(() => this.checkModelStatus(), 1000);
   }
@@ -49,7 +49,12 @@ class WebSocketService {
 
   checkModelStatus() {
     if (this.socket?.readyState === WebSocket.OPEN) {
-      this.socket.send(JSON.stringify({ type: "debug_model_info" }));
+      this.socket.send(
+        JSON.stringify({
+          type: "debug_model_info",
+          timestamp: new Date().toISOString(),
+        })
+      );
     }
   }
 
@@ -112,12 +117,22 @@ class WebSocketService {
   handleMessage(data) {
     // Handle debug_model_info at service level
     if (data.type === "debug_model_info") {
+      // Update computing status
       computingStatus.set(data.is_computing);
-    }
 
-    // Notify all registered handlers
-    for (const handler of this.messageHandlers) {
-      handler(data);
+      // Broadcast the raw message to all handlers
+      this.messageHandlers.forEach((handler) => {
+        handler({
+          type: "debug_model_info",
+          connected_clients: data.connected_clients,
+          unique_clients: data.unique_clients,
+          is_computing: data.is_computing,
+          active_rewards: data.active_rewards,
+        });
+      });
+    } else {
+      // Handle other message types
+      this.messageHandlers.forEach((handler) => handler(data));
     }
   }
 
@@ -166,6 +181,32 @@ class WebSocketService {
   addMessageHandler(handler) {
     this.messageHandlers.add(handler);
     return () => this.messageHandlers.delete(handler); // Return cleanup function
+  }
+
+  updateReward(rewardIndex, updatedParams) {
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      this.socket.send(
+        JSON.stringify({
+          type: "update_reward",
+          index: rewardIndex,
+          parameters: updatedParams,
+          timestamp: new Date().toISOString(),
+        })
+      );
+    }
+  }
+
+  send(data) {
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      this.socket.send(
+        JSON.stringify({
+          ...data,
+          timestamp: new Date().toISOString(),
+        })
+      );
+    } else {
+      console.warn("WebSocket is not connected. Message not sent:", data);
+    }
   }
 }
 

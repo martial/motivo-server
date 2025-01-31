@@ -50,27 +50,7 @@
   });
 </script>
 
-<div class="max-w-[320px] mx-auto space-y-4">
-
-   <!-- Additional Controls -->
-   <div class="bg-white rounded-lg shadow p-4">
-    <h3 class="text-lg font-semibold mb-2">Feed Controls</h3>
-    <div class="flex gap-2">
-      <button
-        class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
-        disabled={!isConnected}
-        on:click={() => {
-          const socket = websocketService.getSocket();
-          if (socket) {
-            socket.send(JSON.stringify({ type: "clean_rewards" }));
-          }
-        }}
-      >
-        Reset Simulation
-      </button>
-    </div>
-  </div>
-  
+<div class="max-w-[320px] mx-auto">
   <!-- Image Container -->
   <div class="relative rounded-xl overflow-hidden bg-white shadow-lg border border-gray-200">
     {#if !isConnected || isLoading}
@@ -121,6 +101,4 @@
     {isLoading}
     {isConnected}
   />
-
- 
 </div> 

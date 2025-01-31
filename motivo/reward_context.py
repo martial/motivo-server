@@ -150,7 +150,7 @@ def create_reward_function(reward_type, weight):
 
 def compute_reward_context(reward_config, env, model, buffer_data):
     """Compute reward context"""
-    combination_type = reward_config.get('combinationType', 'additive')
+    combination_type = reward_config.get('combination_type', 'additive')
     
     print("\n" + "="*50)
     print(f"USING REWARD COMBINATION METHOD: {combination_type.upper()}")
