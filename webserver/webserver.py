@@ -97,7 +97,6 @@ def serve_image():
 def generate_reward():
     print("\n=== New Request ===")
     
-    # Get session ID from request, or create new one
     session_id = request.json.get('sessionId', str(datetime.now().timestamp()))
     prompt = request.json.get('prompt')
     
@@ -108,40 +107,36 @@ def generate_reward():
         # Initialize chat history for new sessions
         if session_id not in chat_histories:
             chat_histories[session_id] = []
-            # Only format with template for the first message in a new session
             formatted_prompt = PROMPT_TEMPLATE.replace("{prompt}", prompt)
         else:
-            # Use raw prompt for subsequent messages
             formatted_prompt = prompt
         
-        # Create messages array with chat history
         messages = [
-            *chat_histories[session_id],  # Include previous messages
+            *chat_histories[session_id],
             {
                 "role": "user",
                 "content": formatted_prompt
             }
         ]
         
-        # Call Claude API with chat history
         message = anthropic.messages.create(
             model="claude-3-sonnet-20240229",
             max_tokens=1024,
             messages=messages
         )
         
-        # Extract response and update chat history
         response_content = message.content[0].text if isinstance(message.content, list) else message.content
         
-        # Add the exchange to chat history
+        # Add the exchange to chat history with original prompt instead of formatted template
         chat_histories[session_id].extend([
-            {"role": "user", "content": formatted_prompt},
+            {"role": "user", "content": prompt},  # Store original prompt instead of formatted_prompt
             {"role": "assistant", "content": response_content}
         ])
         
         return jsonify({
             'reward_config': response_content,
-            'sessionId': session_id
+            'sessionId': session_id,
+            'conversation': chat_histories[session_id]
         })
         
     except Exception as e:

@@ -102,5 +102,5 @@ Guidelines:
 7. Use examples above as reference for combining rewards effectively
 8. Consider the interaction between different rewards when combining them
 
-MANDATORY : YOU MUST ONLY RETURN JSON, NOT COMMENT NO MARKDOWN NO OTHER TEXT, ONLY JSON.
+MANDATORY : YOU MUST ONLY RETURN JSON, NOT COMMENT NO MARKDOWN NO OTHER TEXT, ONLY JSON. DO NOT COMMENT ANYTHING
 Generate a reward configuration that achieves this behavior :  "{prompt}"
