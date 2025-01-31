@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  backend:
+    image: yassinsiouda/motivo-server-back:latest
+    ports:
+      - "5002:5002"
+      - "8765:8765"
+    env_file:
+      - .env
+    volumes:
+      - ./metamotivo-S-1-datasets:/app/metamotivo-S-1-datasets
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+  
+  vibe:
+    image: yassinsiouda/cog-vibe:latest
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+    shm_size: '16gb'  # Shared memory size
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  frontend:
+    image: yassinsiouda/motivo-client-front:latest
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    env_file:
+      - .env
+    restart: unless-stopped
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  watchtower:
+    image: containrrr/watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 30 --cleanup --remove-volumes
+    environment:
+      - WATCHTOWER_CLEANUP=true
+    #  - WATCHTOWER_REMOVE_VOLUMES=true
+    restart: unless-stopped
