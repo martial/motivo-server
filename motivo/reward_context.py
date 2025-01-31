@@ -25,6 +25,7 @@ from custom_rewards import (
 )
 import inspect
 import sys
+import contextlib
 
 def create_reward_function(reward_type, weight):
     """Create a reward function based on config"""
@@ -150,12 +151,19 @@ def create_reward_function(reward_type, weight):
     else:
         raise ValueError(f"Unknown reward type: {name}")
 
-def compute_reward_context(reward_config, env, model, buffer_data):
-    """Compute reward context"""
+def compute_reward_context(reward_config, env, model, buffer_data, use_gpu=True):
+    """Compute reward context with optional GPU acceleration"""
+    if use_gpu:
+        return compute_reward_context_gpu(reward_config, env, model, buffer_data)
+    else:
+        return compute_reward_context_cpu(reward_config, env, model, buffer_data)
+
+def compute_reward_context_cpu(reward_config, env, model, buffer_data):
+    """Original CPU implementation"""
     combination_type = reward_config.get('combination_type', 'multiplicative')
     
     print("\n" + "="*50)
-    print(f"USING REWARD COMBINATION METHOD: {combination_type.upper()}")
+    print(f"USING REWARD COMBINATION METHOD: {combination_type.upper()} (CPU)")
     print("="*50 + "\n")
     
     batch_size = 10_000
@@ -224,12 +232,120 @@ def compute_reward_context(reward_config, env, model, buffer_data):
         reward_fn=combined_reward_fn,
         max_workers=8
     )
+    
     print(f"Computed rewards: {computed_rewards}")
     z = model.reward_wr_inference(
         next_obs=torch.tensor(batch['next_observation'], device=model.cfg.device, dtype=torch.float32),
         reward=torch.tensor(computed_rewards, device=model.cfg.device, dtype=torch.float32)
     )
     print(f"Computed z: {z}")
+    
+    return z
+
+def get_compute_device():
+    """Determine the best available compute device and appropriate dtype"""
+    if torch.cuda.is_available():
+        return torch.device('cuda'), torch.float32
+    elif torch.backends.mps.is_available():
+        return torch.device('mps'), torch.float32
+    return torch.device('cpu'), torch.float64  # CPU can handle float64
+
+def parallel_reward_compute(reward_fn, weight, batch_data, device, dtype, batch_size, env):
+    rewards_batch = torch.zeros(batch_size, device=device, dtype=dtype)
+    chunk_size = 1000
+    
+    # Convert weight to correct dtype
+    weight = torch.as_tensor(weight, device=device, dtype=dtype)
+    
+    for i in range(0, batch_size, chunk_size):
+        end_idx = min(i + chunk_size, batch_size)
+        chunk_data = {k: v[i:end_idx] for k, v in batch_data.items()}
+        
+        for j in range(end_idx - i):
+            context_manager = (
+                torch.cuda.amp.autocast() if device.type == 'cuda'
+                else contextlib.nullcontext()
+            )
+            
+            with context_manager:
+                reward = reward_fn(
+                    env.unwrapped.model,
+                    chunk_data['next_qpos'][j].cpu().numpy().astype(np.float64),
+                    chunk_data['next_qvel'][j].cpu().numpy().astype(np.float64),
+                    chunk_data['action'][j].cpu().numpy().astype(np.float64)
+                )
+                reward_tensor = torch.tensor(reward, device=device, dtype=dtype)
+                rewards_batch[i + j] = reward_tensor * weight
+    
+    return rewards_batch
+
+def compute_reward_context_gpu(reward_config, env, model, buffer_data):
+    """GPU-accelerated implementation with explicit dtype handling"""
+    device, dtype = get_compute_device()
+    if device.type == 'cpu':
+        print("No GPU acceleration available, falling back to CPU")
+        return compute_reward_context_cpu(reward_config, env, model, buffer_data)
+    
+    combination_type = reward_config.get('combination_type', 'multiplicative')
+    batch_size = 10_000  # Moved up for clarity
+    
+    print("\n" + "="*50)
+    print(f"USING REWARD COMBINATION METHOD: {combination_type.upper()} ({device.type.upper()})")
+    print(f"Using dtype: {dtype}")
+    print("="*50 + "\n")
+    
+    idx = np.random.randint(0, len(buffer_data['next_qpos']), batch_size)
+    
+    # Move data to accelerator device with correct dtype
+    batch = {
+        'next_qpos': torch.tensor(buffer_data['next_qpos'][idx], device=device, dtype=dtype),
+        'next_qvel': torch.tensor(buffer_data['next_qvel'][idx], device=device, dtype=dtype),
+        'action': torch.tensor(buffer_data['action'][idx], device=device, dtype=dtype),
+        'next_observation': torch.tensor(buffer_data['next_observation'][idx], device=device, dtype=dtype)
+    }
+    
+    # Create reward functions and weights with correct dtype
+    rewards = []
+    weights = torch.tensor(reward_config.get('weights', [1.0]), device=device, dtype=dtype)
+    
+    for reward_type, weight in zip(reward_config['rewards'], weights):
+        rewards.append(create_reward_function(reward_type, weight))
+    
+    print(f"Computing reward context with {combination_type} combination")
+    
+    # Compute rewards with correct dtype
+    if combination_type == 'additive':
+        computed_rewards = torch.zeros(batch_size, device=device, dtype=dtype)
+        for reward_fn, weight in rewards:
+            computed_rewards += parallel_reward_compute(reward_fn, weight, batch, device, dtype, batch_size, env)
+    elif combination_type == 'multiplicative':
+        computed_rewards = torch.ones(batch_size, device=device, dtype=dtype)
+        for reward_fn, weight in rewards:
+            computed_rewards *= parallel_reward_compute(reward_fn, weight, batch, device, dtype, batch_size, env) ** weight
+    elif combination_type == 'min':
+        rewards_list = [parallel_reward_compute(reward_fn, weight, batch, device, dtype, batch_size, env) 
+                       for reward_fn, weight in rewards]
+        computed_rewards = torch.stack(rewards_list).min(dim=0)[0]
+    elif combination_type == 'max':
+        rewards_list = [parallel_reward_compute(reward_fn, weight, batch, device, dtype, batch_size, env) 
+                       for reward_fn, weight in rewards]
+        computed_rewards = torch.stack(rewards_list).max(dim=0)[0]
+    elif combination_type == 'geometric':
+        epsilon = torch.tensor(1e-8, device=device, dtype=dtype)
+        rewards_list = [torch.max(parallel_reward_compute(reward_fn, weight, batch, device, dtype, batch_size, env), epsilon) 
+                       for reward_fn, weight in rewards]
+        computed_rewards = torch.prod(torch.stack(rewards_list), dim=0) ** (1.0 / len(rewards))
+    else:
+        raise ValueError(f"Unknown combination type: {combination_type}")
+
+    print(f"Computed rewards shape: {computed_rewards.shape}, dtype: {computed_rewards.dtype}")
+    
+    # Ensure correct dtype for model inference
+    z = model.reward_wr_inference(
+        next_obs=batch['next_observation'],
+        reward=computed_rewards.reshape(-1, 1)
+    )
+    print(f"Computed z shape: {z.shape}, dtype: {z.dtype}")
     
     return z
 
