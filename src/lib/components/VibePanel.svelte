@@ -128,7 +128,7 @@
 
 <div class="">
   <div class="bg-white rounded-lg shadow-lg p-4">
-    <h1 class="text-lg font-bold mb-4 text-gray-800">Video Upload</h1>
+    <h1 class="text-lg font-bold mb-4 text-gray-800">Video Upload ( 4/5 sc max for now )</h1>
 
     <div class="space-y-3">
       <div

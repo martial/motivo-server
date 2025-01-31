@@ -68,17 +68,19 @@
                     Vibe Panel
                 </button>
                 <button 
+                class="px-4 py-2 rounded-lg font-medium transition-colors {activePanel === 'llm' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'}"
+                onclick={() => activePanel = 'llm'}
+            >
+                LLM Control
+            </button>
+                <button 
                     class="px-4 py-2 rounded-lg font-medium transition-colors {activePanel === 'favorites' ? 'bg-purple-500 text-white' : 'bg-gray-200 text-gray-700'}"
                     onclick={() => activePanel = 'favorites'}
                 >
                     Favorites {#if favoritesCount > 0}<span class="ml-1 px-1.5 py-0.5 bg-white/20 rounded-full text-sm">{favoritesCount}</span>{/if}
                 </button>
-                <button 
-                    class="px-4 py-2 rounded-lg font-medium transition-colors {activePanel === 'llm' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'}"
-                    onclick={() => activePanel = 'llm'}
-                >
-                    LLM Control
-                </button>
+               
+                
             </div>
 
             <!-- Conditional panel display -->
@@ -95,13 +97,14 @@
                 <div class="flex-1 bg-green-100/50 p-4 rounded-xl">
                     <VibePanel />
                 </div>
-            {:else if activePanel === 'favorites'}
-                <div class="flex-1 bg-purple-100/50 p-4 rounded-xl">
-                    <FavoritesOverview />
-                </div>
             {:else if activePanel === 'llm'}
-                <div class="flex-1 bg-blue-100/50 p-4 rounded-xl">
+                <div class="flex-1 bg-purple-100/50 p-4 rounded-xl">
+                    
                     <LLM />
+                </div>
+            {:else if activePanel === 'favorites'}
+                <div class="flex-1 bg-blue-100/50 p-4 rounded-xl">
+                    <FavoritesOverview />
                 </div>
             {/if}
         </div>

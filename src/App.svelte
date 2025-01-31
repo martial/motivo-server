@@ -27,7 +27,8 @@
     
     <main class="flex-1 bg-gray-50">
       <div class="h-full">
-        <Route path="/"><Home /></Route>
+        <Route path="/"><Control /></Route>
+        <Route path="/testing"><Home /></Route>
         <Route path="/about"><About /></Route>
         <Route path="/live"><LiveFeed /></Route>
         <Route path="/control"><Control /></Route>
@@ -35,9 +36,7 @@
     </main>
 
     <Footer />
-    <div class="fixed bottom-1 right-2">
-      <VersionInfo />
-    </div>
+   
   </Router>
 </div>
 

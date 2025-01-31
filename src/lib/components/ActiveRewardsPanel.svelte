@@ -116,14 +116,12 @@
               <h3 class="text-xl font-bold text-blue-500 font-display tracking-wide">
                 {reward.name}
               </h3>
-              <div class="flex items-center gap-2 w-1/2">
-                <span class="text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap">
-                  Weight
-                </span>
-                <div class="flex-1 min-w-[120px]">
+              <div class="flex items-center gap-2">
+               
+                <div class="w-24 relative">
                   <ParameterControl
                     name="weight"
-                    label={""}
+                    label={"weight"}
                     type="range"
                     value={activeRewards.weights[rewardIndex] * 100}
                     min={0}
@@ -140,6 +138,7 @@
                     }}
                   />
                 </div>
+               
               </div>
             </div>
 
