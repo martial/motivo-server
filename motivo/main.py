@@ -44,6 +44,7 @@ ws_manager = WebSocketManager()  # Replace connected_clients and unique_clients 
 active_rewards = None  # Current active reward configuration
 context_cache = RewardContextCache()
 display_manager = DisplayManager()
+default_z = None  # Will store the first computed context
 
 async def get_reward_context(reward_config):
     """Async wrapper for reward context computation"""
@@ -53,7 +54,7 @@ async def get_reward_context(reward_config):
         is_computing_reward = True
         print("\n=== Reward Context Computation ===")
         print("Computing... ⚙️")
-        print(f"Input config: {json.dumps(reward_config, indent=2)}")
+        #print(f"Input config: {json.dumps(reward_config, indent=2)}")
         
         loop = asyncio.get_event_loop()
         z = await loop.run_in_executor(
@@ -233,24 +234,23 @@ async def handle_websocket(websocket):
                 
                 elif message_type == "clean_rewards":
                     print("\nCleaning active rewards...")
-                    print(f"Cached computations available: {len(context_cache.computation_cache)}")
                     
-                    # Clear active rewards but keep computation cache
-                    active_rewards = {
-                        'rewards': [
-                            { 'name': 'move-ego', 'move_speed': 0.0, 'stand_height': 1.4 }
-                        ],
-                        'weights': [1.0]
-                    }
-                    
-                    print("\nSetting default standing behavior:")
-                    print(f"Default config: {json.dumps(active_rewards, indent=2)}")
-                    
-                    current_z = await context_cache.get_cached_context(active_rewards, get_reward_context)
+                    # Reset to default context
+                    current_z = default_z
+                    active_rewards = None
                     
                     # Reset environment
                     observation, _ = env.reset()
                     print("Environment reset completed")
+                    
+                    # Send debug info immediately after reset
+                    debug_info = {
+                        "type": "debug_model_info",
+                        "is_computing": is_computing_reward,
+                        "active_rewards": active_rewards,
+                        **ws_manager.get_stats()
+                    }
+                    await ws_manager.broadcast(debug_info)
                     
                     response = {
                         "type": "clean_rewards",
@@ -258,7 +258,7 @@ async def handle_websocket(websocket):
                         "timestamp": data.get("timestamp", "")
                     }
                     await websocket.send(json.dumps(response))
-                    
+                
                 elif message_type == "update_parameters":
                     # Handle parameter updates - call update_parameters directly on env
                     new_params = data.get("parameters", {})
@@ -409,6 +409,19 @@ async def handle_websocket(websocket):
                         }
                         await websocket.send(json.dumps(response))
                 
+                elif message_type == "clear_active_rewards":
+                    print("\nClearing active rewards...")
+                    active_rewards = None
+                    current_z = default_z
+                    print("Active rewards cleared ✅")
+                    
+                    response = {
+                        "type": "rewards_cleared",
+                        "status": "success",
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    await websocket.send(json.dumps(response))
+                
             except json.JSONDecodeError:
                 print("Error: Invalid JSON message")
                 await websocket.send(json.dumps({"error": "Invalid JSON"}))
@@ -489,7 +502,7 @@ async def run_simulation():
 
 async def main():
     """Main function"""
-    global model, env, buffer_data, current_z
+    global model, env, buffer_data, current_z, default_z
     
     try:
         print("\n=== Available Rewards ===")
@@ -516,7 +529,7 @@ async def main():
         print("Downloading buffer data...")
         buffer_data = download_buffer()
         
-        # Pre-compute default context and store in cache
+        # Pre-compute default context and store both as current and default
         default_config = {
             'rewards': [
                 { 'name': 'move-ego', 'move_speed': 0.0, 'stand_height': 1.4 }
@@ -525,9 +538,10 @@ async def main():
         }
         print("\nPre-computing default context...")
         
-        current_z = await context_cache.get_cached_context(default_config, get_reward_context)
+        default_z = await get_reward_context(default_config)  # Store directly, not using cache
+        current_z = default_z
         
-        if current_z is None:
+        if default_z is None:
             raise RuntimeError("Failed to compute initial context")
             
         print("\nStarting WebSocket server and simulation...")

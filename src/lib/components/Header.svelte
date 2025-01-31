@@ -29,22 +29,26 @@
   });
 </script>
 
-<header class="w-full bg-white py-6">
-  <div class="px-8 flex justify-between items-center">
-    <h1 class="text-4xl font-black text-black">
-      {title}
-    </h1>
-    <nav class="flex gap-4">
-      <Link to="/" class="hover:text-blue-600">Home</Link>
-      <Link to="/live" class="hover:text-blue-600">Live Feed</Link>
-      <Link to="/control" class="hover:text-blue-600">Control</Link>
-    </nav>
-  </div>
-
-  {#if isDev}
-    <div class="text-sm bg-yellow-100 px-2 py-1 rounded-md">
-      🔧 Dev Build: {$versionInfo.version} 
-      <span class="text-gray-600">({$versionInfo.commitHash.substring(0, 7)})</span>
+<header class="w-full bg-white shadow-sm">
+  <div class="container mx-auto">
+    <div class="px-8 py-2 flex justify-between items-center">
+      <h1 class="text-2xl font-black text-black">
+        {title}
+      </h1>
+      <nav class="flex gap-4">
+        <Link to="/" class="hover:text-blue-600">Home</Link>
+        <Link to="/live" class="hover:text-blue-600">Live Feed</Link>
+        <Link to="/control" class="hover:text-blue-600">Control</Link>
+      </nav>
     </div>
-  {/if}
+
+    {#if isDev}
+      <div class="px-8 pb-2">
+        <div class="text-xs bg-yellow-100 px-2 py-0.5 rounded-md inline-block">
+          🔧 Dev Build: {$versionInfo.version} 
+          <span class="text-gray-600">({$versionInfo.commitHash.substring(0, 7)})</span>
+        </div>
+      </div>
+    {/if}
+  </div>
 </header> 

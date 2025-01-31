@@ -35,8 +35,8 @@ class RewardContextCache:
         params_key = self.get_cache_key(reward_config)
         
         print("\n=== Cache Debug Info ===")
-        print(f"Generated cache key: {params_key}")
-        print(f"Computation cache keys: {list(self.computation_cache.keys())}")
+        #print(f"Generated cache key: {params_key}")
+        #print(f"Computation cache keys: {list(self.computation_cache.keys())}")
         print(f"Cache hit? {'Yes' if params_key in self.computation_cache else 'No'}")
         
         if params_key in self.computation_cache:

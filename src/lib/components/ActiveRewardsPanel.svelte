@@ -13,15 +13,15 @@
 
   onMount(() => {
     cleanupHandler = websocketService.addMessageHandler((data) => {
-      if (data.type === 'debug_model_info' && data.active_rewards) {
+      if (data.type === 'debug_model_info') {
         activeRewards = data.active_rewards;
       }
     });
 
     // Request initial state
-    websocketService.send({
+    websocketService.getSocket()?.send(JSON.stringify({
       type: "debug_model_info"
-    });
+    }));
   });
 
   onDestroy(() => {
@@ -33,7 +33,26 @@
     if (!pendingChanges[rewardIndex]) {
       pendingChanges[rewardIndex] = {};
     }
-    pendingChanges[rewardIndex][name] = value;
+    
+    // Special handling for weight changes
+    if (name === 'weight') {
+      // Create a copy of the current weights array
+      const newWeights = [...activeRewards.weights];
+      newWeights[rewardIndex] = value;
+      
+      // Send immediate weight update
+      websocketService.getSocket()?.send(JSON.stringify({
+        type: 'request_reward',
+        reward: {
+          ...activeRewards,
+          weights: newWeights
+        },
+        timestamp: new Date().toISOString()
+      }));
+    } else {
+      // Handle other parameter changes as before
+      pendingChanges[rewardIndex][name] = value;
+    }
   }
 
   function updateReward(rewardIndex) {

@@ -152,7 +152,7 @@ def create_reward_function(reward_type, weight):
 
 def compute_reward_context(reward_config, env, model, buffer_data):
     """Compute reward context"""
-    combination_type = reward_config.get('combination_type', 'additive')
+    combination_type = reward_config.get('combination_type', 'multiplicative')
     
     print("\n" + "="*50)
     print(f"USING REWARD COMBINATION METHOD: {combination_type.upper()}")
@@ -215,6 +215,7 @@ def compute_reward_context(reward_config, env, model, buffer_data):
     
     combined_reward_fn = reward_combiners.get(combination_type, additive_reward_fn)
     
+    print(f"Computing reward context with {combined_reward_fn.__name__}")
     computed_rewards = relabel(
         env,
         qpos=batch['next_qpos'],
@@ -223,11 +224,12 @@ def compute_reward_context(reward_config, env, model, buffer_data):
         reward_fn=combined_reward_fn,
         max_workers=8
     )
-    
+    print(f"Computed rewards: {computed_rewards}")
     z = model.reward_wr_inference(
         next_obs=torch.tensor(batch['next_observation'], device=model.cfg.device, dtype=torch.float32),
         reward=torch.tensor(computed_rewards, device=model.cfg.device, dtype=torch.float32)
     )
+    print(f"Computed z: {z}")
     
     return z
 

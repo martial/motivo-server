@@ -52,6 +52,12 @@ def allowed_file(filename):
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# Disable Flask's default logging
+import logging
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
+
 CORS(app, resources={
     r"/*": {
         "origins": ["*"],
@@ -60,15 +66,16 @@ CORS(app, resources={
     }
 })
 
-# Load prompt template at startup
+# Load system instructions at startup
 try:
-    with open('prompt_template.txt', 'r', encoding='utf-8') as f:
-        PROMPT_TEMPLATE = f.read()
-    print("Successfully loaded prompt template")
-    print("First few characters:", PROMPT_TEMPLATE[:50])
+    with open('system_instructions.txt', 'r', encoding='utf-8') as f:
+        SYSTEM_INSTRUCTIONS = f.read()
+    print("Successfully loaded system instructions")
 except Exception as e:
-    print(f"Error loading prompt template: {str(e)}")
+    print(f"Error loading system instructions: {str(e)}")
     raise
+
+
 
 # Add chat history storage
 chat_histories = {}
@@ -108,29 +115,36 @@ def generate_reward():
         # Initialize chat history for new sessions
         if session_id not in chat_histories:
             chat_histories[session_id] = []
-            formatted_prompt = PROMPT_TEMPLATE.replace("{prompt}", prompt)
-        else:
-            formatted_prompt = prompt
         
-        messages = [
-            *chat_histories[session_id],
-            {
-                "role": "user",
-                "content": formatted_prompt
-            }
-        ]
+        # Debug print
+        print(f"Sending prompt: {prompt}")
+        print(f"System instructions length: {len(SYSTEM_INSTRUCTIONS)}")
         
         message = anthropic.messages.create(
             model="claude-3-sonnet-20240229",
             max_tokens=1024,
-            messages=messages
+            system=SYSTEM_INSTRUCTIONS,
+            messages=[
+                *chat_histories[session_id],
+                {
+                    "role": "user",
+                    "content": f"Generate a reward configuration that achieves this behavior: {prompt}"
+                }
+            ]
         )
+        
+        # Debug print
+        print(f"Raw message response: {message}")
+        print(f"Message content: {message.content}")
         
         response_content = message.content[0].text if isinstance(message.content, list) else message.content
         
-        # Add the exchange to chat history with original prompt instead of formatted template
+        # Debug print
+        print(f"Final response content: {response_content}")
+        
+        # Add the exchange to chat history
         chat_histories[session_id].extend([
-            {"role": "user", "content": prompt},  # Store original prompt instead of formatted_prompt
+            {"role": "user", "content": prompt},
             {"role": "assistant", "content": response_content}
         ])
         
@@ -272,6 +286,17 @@ def get_git_info():
 @app.route('/api/version')
 def get_version():
     return jsonify(get_git_info())
+
+@app.route('/clear-chat', methods=['POST'])
+def clear_chat():
+    try:
+        session_id = request.json.get('sessionId')
+        if session_id and session_id in chat_histories:
+            chat_histories[session_id] = []
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"Error clearing chat: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5002, debug=True)

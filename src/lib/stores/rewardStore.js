@@ -243,6 +243,13 @@ function createRewardStore() {
         return newStore;
       });
     },
+    cleanRewardsLocal: () => {
+      set({
+        activeRewards: [],
+        weights: [],
+        combinationType: "multiplicative",
+      });
+    },
     cleanRewards: () => {
       set({
         activeRewards: [],

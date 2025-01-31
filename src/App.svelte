@@ -21,23 +21,23 @@
   });
 </script>
 
-<div class="min-h-screen">
+<div class="flex flex-col min-h-screen">
   <Router {url}>
-    <main class="pb-16 flex flex-col bg-gray-50">
-      <Header />
-      
-      <div class="w-full px-4 flex-grow">
+    <Header />
+    
+    <main class="flex-1 bg-gray-50">
+      <div class="h-full">
         <Route path="/"><Home /></Route>
         <Route path="/about"><About /></Route>
         <Route path="/live"><LiveFeed /></Route>
         <Route path="/control"><Control /></Route>
       </div>
-
-      <Footer />
-      <div class="fixed bottom-1 right-2">
-        <VersionInfo />
-      </div>
     </main>
+
+    <Footer />
+    <div class="fixed bottom-1 right-2">
+      <VersionInfo />
+    </div>
   </Router>
 </div>
 

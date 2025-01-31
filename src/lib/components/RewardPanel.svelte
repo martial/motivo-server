@@ -53,8 +53,8 @@
 
   onMount(() => {
     cleanupHandler = websocketService.addMessageHandler((data) => {
-      if (data.type === 'debug_model_info' && data.data?.active_rewards) {
-        activeRewards = data.data.active_rewards;
+      if (data.type === 'debug_model_info') {
+        activeRewards = data.active_rewards;
       }
     });
   });
@@ -78,10 +78,10 @@
       ...activeParameters
     };
 
-    // Combine with existing rewards or create new rewards array
+    // Create new rewards array, properly handling the case when activeRewards exists
     const updatedRewards = {
-      rewards: activeRewards ? [...activeRewards.rewards, newReward] : [newReward],
-      weights: activeRewards ? [...activeRewards.weights, 1.0] : [1.0],
+      rewards: activeRewards?.rewards ? [...activeRewards.rewards, newReward] : [newReward],
+      weights: activeRewards?.weights ? [...activeRewards.weights, 1.0] : [1.0],
       combinationType: activeRewards?.combinationType || 'multiplicative'
     };
 
@@ -90,6 +90,11 @@
       type: 'request_reward',
       reward: updatedRewards,
       timestamp: new Date().toISOString()
+    }));
+
+    // Request updated state after adding reward
+    websocketService.getSocket()?.send(JSON.stringify({
+      type: "debug_model_info"
     }));
   }
 </script>

@@ -198,12 +198,33 @@ class WebSocketService {
 
   send(data) {
     if (this.socket?.readyState === WebSocket.OPEN) {
-      this.socket.send(
-        JSON.stringify({
-          ...data,
-          timestamp: new Date().toISOString(),
-        })
-      );
+      // If this is a clean_rewards message, schedule an immediate debug check
+      if (data.type === "clean_rewards") {
+        this.socket.send(
+          JSON.stringify({
+            ...data,
+            timestamp: new Date().toISOString(),
+          })
+        );
+
+        // Trigger immediate debug check
+        setTimeout(() => {
+          this.socket.send(
+            JSON.stringify({
+              type: "debug_model_info",
+              timestamp: new Date().toISOString(),
+            })
+          );
+        }, 100); // Small delay to ensure reset completes first
+      } else {
+        // Normal message sending
+        this.socket.send(
+          JSON.stringify({
+            ...data,
+            timestamp: new Date().toISOString(),
+          })
+        );
+      }
     } else {
       console.warn("WebSocket is not connected. Message not sent:", data);
     }

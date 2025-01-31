@@ -12,16 +12,22 @@
     import VibePanel from '../components/VibePanel.svelte';
     import { favoriteStore } from '../stores/favoriteStore';
     import LLM from '../components/LLM.svelte';
+    import { chatStore } from '../stores/chatStore';
     
     let isSocketReady = $state(false);
     let cleanupListener;
-    let activePanel = $state('rewards');
+    let activePanel = $state(localStorage.getItem('controlActivePanel') || 'rewards');
     
     // Subscribe to favoriteStore to get the count
     let favoritesCount = $state(0);
     
     $effect(() => {
         favoritesCount = Object.keys($favoriteStore).length;
+    });
+
+    // Update localStorage when panel changes
+    $effect(() => {
+        localStorage.setItem('controlActivePanel', activePanel);
     });
 
     onMount(() => {
@@ -37,7 +43,7 @@
     });
 </script>
   
-<div class="bg-gray-50 min-h-screen p-4">
+<div class="bg-gray-50 p-4">
     <div class="flex gap-8">
         <!-- Always visible LiveFeed section - fixed width -->
         <div class="w-[420px] flex flex-col gap-8 bg-blue-100/50 p-4 rounded-xl">
