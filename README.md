@@ -144,6 +144,8 @@ sudo apt-get install libxcb-xinerama0
 export MUJOCO_GL=egl
 ```
 
+Update
+
 ## License
 
 MIT License
