@@ -8,6 +8,7 @@
   import About from './lib/pages/About.svelte';
   import Control from './lib/pages/Control.svelte';
   import Footer from './lib/components/Footer.svelte';
+  import VersionInfo from './lib/components/VersionInfo.svelte';
   
   export let url = "";
 
@@ -33,6 +34,9 @@
       </div>
 
       <Footer />
+      <div class="fixed bottom-1 right-2">
+        <VersionInfo />
+      </div>
     </main>
   </Router>
 </div>
