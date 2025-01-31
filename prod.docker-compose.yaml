@@ -26,7 +26,16 @@ services:
     ports:
       - "5000:5000"
     restart: unless-stopped
-    shm_size: '16gb'  # Shared memory size
+    shm_size: '16gb'
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      # Disable GUI and use headless mode
+      - DISPLAY=:99
+      - DEBIAN_FRONTEND=noninteractive
+      - PYTHONUNBUFFERED=1
+      # Force CPU rendering for EGL
+      - LIBGL_ALWAYS_SOFTWARE=1
     deploy:
       resources:
         reservations:
