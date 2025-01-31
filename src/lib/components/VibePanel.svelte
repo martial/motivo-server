@@ -65,7 +65,7 @@
 
       // Send POST request to upload endpoint
       const response = await fetch(`${apiUrl}/upload-video`, {
-        mode: "cors",
+        mode: "no-cors",
         method: "POST",
         body: formData,
       });
