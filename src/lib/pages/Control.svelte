@@ -10,9 +10,18 @@
     import { rewardStore } from '../stores/rewardStore';
     import { websocketService } from '../services/websocketService';
     import VibePanel from '../components/VibePanel.svelte';
+    import { favoriteStore } from '../stores/favoriteStore';
     
     let isSocketReady = $state(false);
     let cleanupListener;
+    let activePanel = $state('rewards');
+    
+    // Subscribe to favoriteStore to get the count
+    let favoritesCount = $state(0);
+    
+    $effect(() => {
+        favoritesCount = Object.keys($favoriteStore).length;
+    });
 
     onMount(() => {
         cleanupListener = websocketService.onReadyStateChange((ready) => {
@@ -28,33 +37,56 @@
 </script>
   
 <div class="bg-gray-50 min-h-screen p-4">
-    <div class="flex flex-col gap-8">
-        <div class="flex flex-wrap gap-8">
-            <!-- Left column with LiveFeed and VibePanel -->
-            <div class="flex-none w-[420px] flex flex-col gap-8 bg-blue-100/50 p-4 rounded-xl">
-                <LiveFeed />
-                <ParameterPanel class="flex-1 min-w-[400px]" />
-
-                <!--<VibePanel />-->
-            </div>
-            
-            <!-- Right section with reward panels -->
-            <div class="flex-1 flex flex-wrap gap-8">
-                <!-- Isolated RewardPanel with its own background -->
-                <div class="flex-1 max-w-[420px] bg-amber-100/50 p-4 rounded-xl">
-                    <RewardPanel />
-                </div>
-                
-                <!-- Isolated ActiveRewardsPanel with its own background -->
-                <div class="flex-1 min-w-[400px] bg-green-100/50 p-4 rounded-xl">
-                    <ActiveRewardsPanel />
-                </div>
-            </div>
+    <div class="flex gap-8">
+        <!-- Always visible LiveFeed section - fixed width -->
+        <div class="w-[420px] flex flex-col gap-8 bg-blue-100/50 p-4 rounded-xl">
+            <LiveFeed />
+            <ParameterPanel class="flex-1 min-w-[400px]" />
         </div>
-        
-        <!-- Full-width FavoritesOverview at the bottom -->
-        <div class="w-full bg-purple-100/50 p-4 rounded-xl">
-            <FavoritesOverview />
+
+        <!-- Right side content -->
+        <div class="flex-1 flex flex-col gap-8">
+            <!-- Panel selection buttons -->
+            <div class="flex gap-4">
+                <button 
+                    class="px-4 py-2 rounded-lg font-medium transition-colors {activePanel === 'rewards' ? 'bg-amber-500 text-white' : 'bg-gray-200 text-gray-700'}"
+                    on:click={() => activePanel = 'rewards'}
+                >
+                    Rewards
+                </button>
+                <button 
+                    class="px-4 py-2 rounded-lg font-medium transition-colors {activePanel === 'vibe' ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-700'}"
+                    on:click={() => activePanel = 'vibe'}
+                >
+                    Vibe Panel
+                </button>
+                <button 
+                    class="px-4 py-2 rounded-lg font-medium transition-colors {activePanel === 'favorites' ? 'bg-purple-500 text-white' : 'bg-gray-200 text-gray-700'}"
+                    on:click={() => activePanel = 'favorites'}
+                >
+                    Favorites {#if favoritesCount > 0}<span class="ml-1 px-1.5 py-0.5 bg-white/20 rounded-full text-sm">{favoritesCount}</span>{/if}
+                </button>
+            </div>
+
+            <!-- Conditional panel display -->
+            {#if activePanel === 'rewards'}
+                <div class="flex-1 flex flex-wrap gap-8">
+                    <div class="flex-1 max-w-[420px] bg-amber-100/50 p-4 rounded-xl">
+                        <RewardPanel />
+                    </div>
+                    <div class="flex-1 min-w-[400px] bg-green-100/50 p-4 rounded-xl">
+                        <ActiveRewardsPanel />
+                    </div>
+                </div>
+            {:else if activePanel === 'vibe'}
+                <div class="flex-1 bg-green-100/50 p-4 rounded-xl">
+                    <VibePanel />
+                </div>
+            {:else if activePanel === 'favorites'}
+                <div class="flex-1 bg-purple-100/50 p-4 rounded-xl">
+                    <FavoritesOverview />
+                </div>
+            {/if}
         </div>
     </div>
 </div>

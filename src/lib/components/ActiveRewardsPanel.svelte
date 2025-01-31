@@ -3,6 +3,7 @@
   import { websocketService } from '../services/websocketService';
   import { fade } from 'svelte/transition';
   import { REWARD_TYPES } from '../stores/rewardStore';
+  import { favoriteStore } from '../stores/favoriteStore';
   import ParameterControl from './ParameterControl.svelte';
   import ParameterGroup from './ParameterGroup.svelte';
 
@@ -54,11 +55,38 @@
       timestamp: new Date().toISOString()
     }));
   }
+
+  function saveCurrentConfig() {
+    const name = prompt('Enter a name for this configuration:');
+    if (!name || !activeRewards) return;
+    
+    // Format the rewards data to include weights
+    const rewardsWithWeights = activeRewards.rewards.map((reward, index) => ({
+      ...reward,
+      weight: activeRewards.weights[index]
+    }));
+
+    // Save to favoriteStore
+    favoriteStore.saveFavorite(name, {
+      activeRewards: rewardsWithWeights,
+      combinationType: activeRewards.combinationType
+    });
+  }
 </script>
 
 <div class="h-full w-full">
   <div class="bg-white rounded-lg shadow-lg p-4 h-full">
-    <h1 class="text-lg font-bold mb-4 text-gray-800">Active Rewards</h1>
+    <div class="flex justify-between items-center mb-4">
+      <h1 class="text-lg font-bold text-gray-800">Active Rewards</h1>
+      {#if activeRewards?.rewards?.length > 0}
+        <button 
+          class="bg-green-500 text-white px-3 py-1 text-sm font-medium rounded-md hover:bg-green-600 transition-colors"
+          on:click={saveCurrentConfig}
+        >
+          Save Current
+        </button>
+      {/if}
+    </div>
     
     {#if activeRewards}
       <div class="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-4 auto-rows-min">
