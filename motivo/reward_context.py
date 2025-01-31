@@ -63,8 +63,10 @@ def create_reward_function(reward_type, weight):
     
     # Handle poses
     elif name == 'raisearms':
-        return (humenv_rewards.RaiseArmsReward(
-            target_height=reward_type.get('target_height', 1.8)
+        return (humenv_rewards.ArmsReward(
+            stand_height=reward_type.get('stand_height', 1.4),
+            left_pose=reward_type.get('left_pose', 'h'),
+            right_pose=reward_type.get('right_pose', 'h')
         ), weight)
     elif name == 'headstand':
         return (humenv_rewards.HeadstandReward(

@@ -11,6 +11,7 @@
     import { websocketService } from '../services/websocketService';
     import VibePanel from '../components/VibePanel.svelte';
     import { favoriteStore } from '../stores/favoriteStore';
+    import LLM from '../components/LLM.svelte';
     
     let isSocketReady = $state(false);
     let cleanupListener;
@@ -50,21 +51,27 @@
             <div class="flex gap-4">
                 <button 
                     class="px-4 py-2 rounded-lg font-medium transition-colors {activePanel === 'rewards' ? 'bg-amber-500 text-white' : 'bg-gray-200 text-gray-700'}"
-                    on:click={() => activePanel = 'rewards'}
+                    onclick={() => activePanel = 'rewards'}
                 >
                     Rewards
                 </button>
                 <button 
                     class="px-4 py-2 rounded-lg font-medium transition-colors {activePanel === 'vibe' ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-700'}"
-                    on:click={() => activePanel = 'vibe'}
+                    onclick={() => activePanel = 'vibe'}
                 >
                     Vibe Panel
                 </button>
                 <button 
                     class="px-4 py-2 rounded-lg font-medium transition-colors {activePanel === 'favorites' ? 'bg-purple-500 text-white' : 'bg-gray-200 text-gray-700'}"
-                    on:click={() => activePanel = 'favorites'}
+                    onclick={() => activePanel = 'favorites'}
                 >
                     Favorites {#if favoritesCount > 0}<span class="ml-1 px-1.5 py-0.5 bg-white/20 rounded-full text-sm">{favoritesCount}</span>{/if}
+                </button>
+                <button 
+                    class="px-4 py-2 rounded-lg font-medium transition-colors {activePanel === 'llm' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'}"
+                    onclick={() => activePanel = 'llm'}
+                >
+                    LLM Control
                 </button>
             </div>
 
@@ -85,6 +92,10 @@
             {:else if activePanel === 'favorites'}
                 <div class="flex-1 bg-purple-100/50 p-4 rounded-xl">
                     <FavoritesOverview />
+                </div>
+            {:else if activePanel === 'llm'}
+                <div class="flex-1 bg-blue-100/50 p-4 rounded-xl">
+                    <LLM />
                 </div>
             {/if}
         </div>

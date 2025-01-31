@@ -21,10 +21,22 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# use os to get VITE_BACKEND_DOMAIN
+# use os to get environment variables
 VITE_API_URL = os.getenv('VITE_API_URL') or 'localhost'
 VITE_API_PORT = os.getenv('VITE_API_PORT') or 5002
 VITE_VIBE_URL = os.getenv('VITE_VIBE_URL') or 5000
+ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
+
+if not ANTHROPIC_API_KEY:
+    raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
+
+# Initialize Anthropic client with API key
+try:
+    anthropic = Anthropic(api_key=ANTHROPIC_API_KEY)
+    print("Successfully initialized Anthropic client")
+except Exception as e:
+    print(f"Error initializing Anthropic client: {str(e)}")
+    raise
 
 # Add these configurations after app initialization
 UPLOAD_FOLDER = 'uploads'
@@ -46,7 +58,6 @@ CORS(app, resources={
         "allow_headers": ["Content-Type"]
     }
 })
-anthropic = Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
 
 # Load prompt template at startup
 try:
