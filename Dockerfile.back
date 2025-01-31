@@ -34,7 +34,7 @@ COPY requirements.txt .
 RUN uv pip install -r requirements.txt --system
 COPY scripts /app/scripts
 COPY webserver /app/webserver
-COPY system_instructions.txt /app/system_instructions.txt
+COPY webserver/system_instructions.txt /app/system_instructions.txt
 COPY motivo /app/motivo
 RUN mkdir -p /app/runtime
 COPY start.sh .
