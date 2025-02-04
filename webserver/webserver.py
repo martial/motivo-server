@@ -4,6 +4,7 @@ import uuid
 import traceback
 from datetime import datetime
 import subprocess
+import ffmpeg
 
 # Third-party imports
 from flask import Flask, send_from_directory, request, jsonify, send_file
@@ -174,57 +175,61 @@ def download_file(filename):
 
 @app.route('/upload-video', methods=['POST'])
 def upload_video():
-    if 'video' not in request.files:
+    # Check if video file exists in request
+    if 'video' not in request.files or request.files['video'].filename == '':
         return jsonify({'error': 'No video file provided'}), 400
     
     file = request.files['video']
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
+    
+    # Validate and save file
+    if not allowed_file(file.filename):
+        return jsonify({'error': 'Invalid file type'}), 400
         
-    if file and allowed_file(file.filename):
-        # Generate unique filename
-        filename = secure_filename(f"{str(uuid.uuid4())}_{file.filename}")
-        filepath = os.path.join(UPLOAD_FOLDER, filename)
-        file.save(filepath)
-        
-        # Generate the video URL
-        video_url = f'{VITE_API_URL}/uploads/{filename}'
+    # Save file with unique name
+    filename = secure_filename(f"{str(uuid.uuid4())}_{file.filename}")
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    file.save(filepath)
+    
+    # Validate and get trim duration
+    trim_sec = min(max(request.form.get('trim', type=int, default=5), 1), 15)
+    
+    # Trim video
+    trimmed_filename = f"trimmed_{filename}"
+    trimmed_filepath = os.path.join(UPLOAD_FOLDER, trimmed_filename)
+    
+    try:
+        # Trim video using FFmpeg
+        ffmpeg.input(filepath).output(trimmed_filepath, t=trim_sec).run()
+        video_url = f'{VITE_API_URL}/uploads/{trimmed_filename}'
         
         # Make prediction request
-        try:
-            prediction_response = requests.post(
-                f'{VITE_VIBE_URL}/predictions',
-                headers={
-                    'accept': 'application/json',
-                    'Content-Type': 'application/json'
-                },
-                json={
-                    "input": {
-                        "media": video_url,
-                        "render_video": True
-                    }
+        response = requests.post(
+            f'{VITE_VIBE_URL}/predictions',
+            headers={'accept': 'application/json', 'Content-Type': 'application/json'},
+            json={
+                "input": {
+                    "media": video_url,
+                    "render_video": True
                 }
-            )
-            print(f'{VITE_VIBE_URL}/predictions',)
-            print(prediction_response.text)
-            prediction_data = prediction_response.json()
-            
-            # Return both the video URL and prediction results
-            return jsonify({
-                'success': True,
-                'video_url': video_url,
-                'prediction': prediction_data
-            })
-            
-        except requests.exceptions.RequestException as e:
-            print(f"Prediction error: {str(e)}")
-            return jsonify({
-                'success': True,
-                'video_url': video_url,
-                'prediction_error': 'Failed to get prediction'
-            })
-    
-    return jsonify({'error': 'Invalid file type'}), 400
+            },
+            timeout=600  # Add timeout to prevent hanging
+        )
+
+
+        response.raise_for_status()  # Raise exception for bad status codes
+        
+        return  json.dumps({
+            'success': True,
+            'video_url': video_url,
+            'prediction': response.json()
+        })
+        
+    except ffmpeg.Error as e:
+        return jsonify({'error': 'Failed to trim video'}), 500
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': f'Prediction failed: {str(e)}'}), 500
+    except Exception as e:
+        return jsonify({'error': f'Unexpected error: {str(e)}'}), 500
 
 @app.route('/uploads/<path:filename>')
 def serve_video(filename):

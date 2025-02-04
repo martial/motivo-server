@@ -11,6 +11,10 @@
   let uploadedVideoUrl = "";
   let outputVideoBase64 = "";
   let poseData = null;
+  let trimSeconds = 5; // Default value for slider
+  let processingProgress = 0;
+  let processingState = '';
+  let processingInterval;
 
   const apiUrl = import.meta.env.VITE_API_URL;
 
@@ -51,6 +55,43 @@
     videoUrl = URL.createObjectURL(file);
   }
 
+  function startProgressSimulation() {
+    let estimatedTime = (trimSeconds * 2); // Base time estimation
+    processingProgress = 0;
+    processingState = 'Trimming video';
+
+    processingInterval = setInterval(() => {
+      let progressStep;
+
+      // Fast initial progress (0-90%)
+      if (processingProgress < 90) {
+        // Use a logarithmic curve for faster initial progress
+        if (processingProgress < 10) {
+          progressStep = 0.5; // Fast progress during trimming
+          processingState = '✂️ Trimming video';
+        } else if (processingProgress < 30) {
+          progressStep = 0.4; // Slightly slower for pose estimation
+          processingState = '🤾 Estimating pose';
+        } else {
+          // Faster progress for rendering (30-90%)
+          progressStep = 0.3 * (1 - processingProgress / 100); // Gradually slowing down
+          processingState = '💾 Rendering mesh';
+        }
+      } else {
+        // Very slow progress for the last 10%
+        progressStep = 0.05 * (1 - processingProgress / 100);
+        processingState = 'Finalizing';
+      }
+
+      processingProgress = Math.min(processingProgress + progressStep, 99.9);
+
+      // Don't reach 100% until the request is complete
+      if (processingProgress >= 99.9) {
+        clearInterval(processingInterval);
+      }
+    }, 100);
+  }
+
   async function handleUpload() {
     if (!selectedFile) {
       errorMessage = "Please select a video file first";
@@ -58,14 +99,15 @@
     }
 
     isLoading = true;
+    startProgressSimulation();
 
     try {
       const formData = new FormData();
       formData.append("video", selectedFile);
+      formData.append("trim", trimSeconds);
 
-      // Send POST request to upload endpoint
       const response = await fetch(`${apiUrl}/upload-video`, {
-        mode: "no-cors",
+        mode: "cors",
         method: "POST",
         body: formData,
       });
@@ -87,6 +129,9 @@
       console.error("Upload error:", error);
     } finally {
       isLoading = false;
+      clearInterval(processingInterval);
+      processingProgress = 100;
+      processingState = 'Complete';
     }
   }
 
@@ -101,7 +146,6 @@
 
   function downloadPoseData() {
     if (!poseData) return;    
-    // "{\n  \"person_1\": {\n 
     let cleanPoseData = JSON.parse(JSON.stringify(poseData));
     const blob = new Blob([cleanPoseData], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -124,12 +168,31 @@
     if (videoUrl) {
       URL.revokeObjectURL(videoUrl);
     }
+    if (processingInterval) {
+      clearInterval(processingInterval);
+    }
   });
 </script>
 
 <div class="">
   <div class="bg-white rounded-lg shadow-lg p-4">
-    <h1 class="text-lg font-bold mb-4 text-gray-800">Video Upload ( 4/5 sc max for now )</h1>
+    <h1 class="text-lg font-bold mb-4 text-gray-800">Video Upload</h1>
+
+    <!-- Slider -->
+    <div class="mb-4">
+      <label for="trimSeconds" class="block text-sm font-medium text-gray-700">
+        Video Duration (seconds): {trimSeconds}s
+      </label>
+      <input
+        type="range"
+        id="trimSeconds"
+        bind:value={trimSeconds}
+        min="1"
+        max="15"
+        step="1"
+        class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+      />
+    </div>
 
     <div class="space-y-3">
       <div
@@ -149,8 +212,20 @@
         />
 
         {#if isLoading}
-          <div class="text-gray-600 my-5">Uploading... May take up to a minute</div>
-        {:else if videoUrl}
+          <div class="w-full space-y-2">
+            <div class="text-gray-600">
+              {processingState}
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2.5">
+              <div
+                class="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                style="width: {processingProgress}%"
+              ></div>
+            </div>
+          </div>
+        {/if}
+
+        {#if videoUrl}
           <div class="mt-5">
             <h2 class="text-md font-semibold mb-2">Input Video</h2>
             <video
@@ -171,9 +246,10 @@
               </button>
               <button
                 on:click={handleUpload}
-                class="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors"
+                disabled={isLoading}
+                class="px-3 py-1 {isLoading ? 'bg-gray-400' : 'bg-green-600 hover:bg-green-700'} text-white text-sm rounded transition-colors"
               >
-                Upload
+                {isLoading ? 'Processing...' : 'Upload'}
               </button>
             </div>
           </div>
@@ -199,7 +275,7 @@
           <div class="mt-8">
             <h2 class="text-md font-semibold mb-2">Processed Video Output</h2>
             <video
-              src={`${outputVideoBase64}`}
+              src={outputVideoBase64}
               controls
               class="max-w-full max-h-[300px] mb-3 mx-auto"
             >
