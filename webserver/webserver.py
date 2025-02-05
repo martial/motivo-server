@@ -190,16 +190,36 @@ def upload_video():
     filepath = os.path.join(UPLOAD_FOLDER, filename)
     file.save(filepath)
     
-    # Validate and get trim duration
+    # Get and validate parameters
     trim_sec = min(max(request.form.get('trim', type=int, default=5), 1), 15)
-    
-    # Trim video
-    trimmed_filename = f"trimmed_{filename}"
-    trimmed_filepath = os.path.join(UPLOAD_FOLDER, trimmed_filename)
+    start_sec = max(request.form.get('start', type=float, default=0), 0)
     
     try:
-        # Trim video using FFmpeg
-        ffmpeg.input(filepath).output(trimmed_filepath, t=trim_sec).run()
+        # Get video duration using ffprobe
+        probe = ffmpeg.probe(filepath)
+        duration = float(probe['streams'][0]['duration'])
+        
+        # Validate if there's enough video length for the requested trim
+        if start_sec + trim_sec > duration:
+            return jsonify({
+                'error': 'Invalid trim parameters. The requested start time plus trim duration exceeds the video length.',
+                'video_duration': duration,
+                'requested_duration': start_sec + trim_sec
+            }), 400
+        
+        # Trim video
+        trimmed_filename = f"trimmed_{filename}"
+        trimmed_filepath = os.path.join(UPLOAD_FOLDER, trimmed_filename)
+        
+        # Trim video using FFmpeg with start time
+        ffmpeg.input(filepath).output(
+            trimmed_filepath,
+            r=30,          # Frame rate
+            ss=start_sec,  # Start time
+            t=trim_sec,     # Duration
+            vsync='cfr'  # Constant frame rate
+        ).run()
+        
         video_url = f'{VITE_API_URL}/uploads/{trimmed_filename}'
         
         # Make prediction request
@@ -212,20 +232,24 @@ def upload_video():
                     "render_video": True
                 }
             },
-            timeout=600  # Add timeout to prevent hanging
+            timeout=600
         )
 
-
-        response.raise_for_status()  # Raise exception for bad status codes
+        response.raise_for_status()
         
-        return  json.dumps({
+        return json.dumps({
             'success': True,
             'video_url': video_url,
-            'prediction': response.json()
+            'prediction': response.json(),
+            'video_info': {
+                'original_duration': duration,
+                'trim_start': start_sec,
+                'trim_duration': trim_sec
+            }
         })
         
     except ffmpeg.Error as e:
-        return jsonify({'error': 'Failed to trim video'}), 500
+        return jsonify({'error': 'Failed to trim video', 'details': str(e)}), 500
     except requests.exceptions.RequestException as e:
         return jsonify({'error': f'Prediction failed: {str(e)}'}), 500
     except Exception as e:

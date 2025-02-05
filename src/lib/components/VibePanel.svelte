@@ -1,5 +1,6 @@
 <script>
   import { onMount, onDestroy } from "svelte";
+  import VideoEditor from "./VideoEditor.svelte";
 
   let videoUrl = "";
   let fileInput;
@@ -11,14 +12,17 @@
   let uploadedVideoUrl = "";
   let outputVideoBase64 = "";
   let poseData = null;
-  let trimSeconds = 5; // Default value for slider
+  let trimSeconds = 5;
   let processingProgress = 0;
   let processingState = '';
   let processingInterval;
+  let selectedFrame = 0;
+  let currentTime = 0;
+  let videoDuration = 0;
+  let trimStartTime = 0;
 
   const apiUrl = import.meta.env.VITE_API_URL;
 
-  // Configurable options
   export let maxSizeInMB = 50;
   export let acceptedTypes = ["video/mp4", "video/webm", "video/ogg"];
 
@@ -35,57 +39,71 @@
     validateAndProcessFile(file);
   }
 
-  function validateAndProcessFile(file) {
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = error => reject(error);
+    });
+  }
+
+  async function validateAndProcessFile(file) {
     errorMessage = "";
 
-    // Validate file type
     if (!acceptedTypes.includes(file.type)) {
       errorMessage = "Please upload a valid video file (MP4, WebM, or OGG)";
       return;
     }
 
-    // Validate file size
     if (file.size > maxSizeInMB * 1024 * 1024) {
       errorMessage = `File size must be less than ${maxSizeInMB}MB`;
       return;
     }
 
     selectedFile = file;
-    // Create preview URL
-    videoUrl = URL.createObjectURL(file);
+    try {
+      videoUrl = await fileToBase64(file);
+    } catch (error) {
+      errorMessage = "Error converting file to base64";
+      console.error(error);
+    }
+  }
+
+  function handleVideoMetadata(event) {
+    videoDuration = event.target.duration;
+  }
+
+  function handleTimeUpdate(event) {
+    currentTime = event.target.currentTime;
   }
 
   function startProgressSimulation() {
-    let estimatedTime = (trimSeconds * 2); // Base time estimation
+    let estimatedTime = (trimSeconds * 2);
     processingProgress = 0;
     processingState = 'Trimming video';
 
     processingInterval = setInterval(() => {
       let progressStep;
 
-      // Fast initial progress (0-90%)
       if (processingProgress < 90) {
-        // Use a logarithmic curve for faster initial progress
         if (processingProgress < 10) {
-          progressStep = 0.5; // Fast progress during trimming
+          progressStep = 0.5;
           processingState = '✂️ Trimming video';
         } else if (processingProgress < 30) {
-          progressStep = 0.4; // Slightly slower for pose estimation
+          progressStep = 0.4;
           processingState = '🤾 Estimating pose';
         } else {
-          // Faster progress for rendering (30-90%)
-          progressStep = 0.3 * (1 - processingProgress / 100); // Gradually slowing down
+          progressStep = 0.3 * (1 - processingProgress / 100);
           processingState = '💾 Rendering mesh';
         }
       } else {
-        // Very slow progress for the last 10%
         progressStep = 0.05 * (1 - processingProgress / 100);
         processingState = 'Finalizing';
       }
 
       processingProgress = Math.min(processingProgress + progressStep, 99.9);
 
-      // Don't reach 100% until the request is complete
       if (processingProgress >= 99.9) {
         clearInterval(processingInterval);
       }
@@ -105,6 +123,8 @@
       const formData = new FormData();
       formData.append("video", selectedFile);
       formData.append("trim", trimSeconds);
+      formData.append("start", trimStartTime);
+      formData.append("frame", selectedFrame);
 
       const response = await fetch(`${apiUrl}/upload-video`, {
         mode: "cors",
@@ -118,6 +138,7 @@
         uploadedVideoUrl = result.video_url;
         outputVideoBase64 = result.prediction?.output?.video;
         poseData = result.prediction?.output?.pose;
+        console.log("poseData", poseData);
         console.log("Upload successful. Video URL:", uploadedVideoUrl);
         console.log("Video metadata:", result);
         console.log("Prediction output:", result.prediction?.output);
@@ -146,7 +167,7 @@
 
   function downloadPoseData() {
     if (!poseData) return;    
-    let cleanPoseData = JSON.parse(JSON.stringify(poseData));
+    let cleanPoseData = poseData;
     const blob = new Blob([cleanPoseData], { type: "application/json" });
     const url = URL.createObjectURL(blob);
 
@@ -160,11 +181,10 @@
   }
 
   onMount(() => {
-    // Any mount logic if needed
+    // Mount logic if needed
   });
 
   onDestroy(() => {
-    // Clean up object URLs on component destroy
     if (videoUrl) {
       URL.revokeObjectURL(videoUrl);
     }
@@ -177,22 +197,6 @@
 <div class="">
   <div class="bg-white rounded-lg shadow-lg p-4">
     <h1 class="text-lg font-bold mb-4 text-gray-800">Video Upload</h1>
-
-    <!-- Slider -->
-    <div class="mb-4">
-      <label for="trimSeconds" class="block text-sm font-medium text-gray-700">
-        Video Duration (seconds): {trimSeconds}s
-      </label>
-      <input
-        type="range"
-        id="trimSeconds"
-        bind:value={trimSeconds}
-        min="1"
-        max="15"
-        step="1"
-        class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-      />
-    </div>
 
     <div class="space-y-3">
       <div
@@ -232,12 +236,51 @@
               bind:this={videoElement}
               src={videoUrl}
               controls
+              on:loadedmetadata={handleVideoMetadata}
+              on:timeupdate={handleTimeUpdate}
               class="max-w-full max-h-[300px] mb-3 mx-auto"
             >
               <track kind="captions" />
               Your browser does not support the video tag.
             </video>
-            <div class="space-x-2">
+
+            <!-- Add trim controls -->
+            <div class="space-y-4 mt-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700">
+                  Start Time: {trimStartTime.toFixed(1)}s
+                </label>
+                <input
+                  type="range"
+                  bind:value={trimStartTime}
+                  min="0"
+                  max={Math.max(0, videoDuration - trimSeconds)}
+                  step="0.1"
+                  class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                  on:input={() => {
+                    if (videoElement) {
+                      videoElement.currentTime = trimStartTime;
+                    }
+                  }}
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700">
+                  Duration: {trimSeconds}s
+                </label>
+                <input
+                  type="range"
+                  bind:value={trimSeconds}
+                  min="1"
+                  max="15"
+                  step="1"
+                  class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+            </div>
+
+            <div class="space-x-2 mt-4">
               <button
                 on:click={() => fileInput.click()}
                 class="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700 transition-colors"
@@ -274,14 +317,11 @@
         {#if outputVideoBase64}
           <div class="mt-8">
             <h2 class="text-md font-semibold mb-2">Processed Video Output</h2>
-            <video
-              src={outputVideoBase64}
-              controls
-              class="max-w-full max-h-[300px] mb-3 mx-auto"
-            >
-              <track kind="captions" />
-              Your browser does not support the video tag.
-            </video>
+            <VideoEditor
+              pose={poseData}
+              videoBase64={outputVideoBase64}
+              bind:frame={selectedFrame}
+            />
           </div>
         {/if}
 
