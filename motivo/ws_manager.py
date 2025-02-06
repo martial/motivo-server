@@ -3,6 +3,7 @@ from typing import Set, Dict, Any
 import json
 import websockets
 from datetime import datetime
+from websockets.asyncio.server import broadcast
 
 class WebSocketManager:
     def __init__(self):
@@ -22,38 +23,20 @@ class WebSocketManager:
     async def remove_client(self, websocket: websockets.WebSocketServerProtocol) -> None:
         """Safely remove a client connection"""
         async with self._lock:
-            try:
-                self.connected_clients.remove(websocket)
-                # Remove unique identifier
-                client_id = str(id(websocket))
-                self.unique_clients.discard(client_id)
-                print(f"Client removed. Total connections: {len(self.connected_clients)}")
-            except KeyError:
-                print("Warning: Attempted to remove non-existent client")
+            self.connected_clients.discard(websocket)
+            # Remove unique identifier
+            client_id = str(id(websocket))
+            self.unique_clients.discard(client_id)
+            print(f"Client removed. Total connections: {len(self.connected_clients)}")
     
     async def broadcast(self, message: Dict[Any, Any]) -> None:
-        """Safely broadcast a message to all connected clients"""
+        """Efficiently broadcast a message to all connected clients"""
         if not isinstance(message, str):
             message = json.dumps(message)
-
-        # Create a copy of connected clients to avoid modification during iteration
+            
         async with self._lock:
-            clients = self.connected_clients.copy()
-
-        # Send to all clients, handling disconnections
-        disconnected = set()
-        for websocket in clients:
-            try:
-                await websocket.send(message)
-            except websockets.exceptions.ConnectionClosed:
-                disconnected.add(websocket)
-            except Exception as e:
-                print(f"Error broadcasting to client: {str(e)}")
-                disconnected.add(websocket)
-
-        # Remove disconnected clients
-        for websocket in disconnected:
-            await self.remove_client(websocket)
+            # Use the built-in broadcast helper
+            broadcast(self.connected_clients, message)
     
     def get_stats(self) -> Dict[str, int]:
         """Get current connection statistics"""
