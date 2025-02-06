@@ -246,10 +246,30 @@
   }
 
   .form-checkbox {
-    @apply h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500;
+      width: 1rem;
+      height: 1rem;
+      border-radius: 0.25rem;
+      border: 1px solid #d1d5db;
+      color: #2563eb;
+      background-color: #fff;
   }
 
   .form-select {
-    @apply block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500;
+      display: block;
+      width: 100%;
+      padding: 0.375rem 0.75rem;
+      font-size: 0.875rem;
+      line-height: 1.5;
+      color: #374151;
+      background-color: #fff;
+      border: 1px solid #d1d5db;
+      border-radius: 0.375rem;
+      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  }
+
+  .form-select:focus,
+  .form-checkbox:focus {
+      outline: 2px solid #3b82f6;
+      outline-offset: 2px;
   }
 </style>
