@@ -9,7 +9,7 @@ import os
 from datetime import datetime
 import numpy as np
 from frame_utils import save_frame_data
-from smpl_utils import qpos_to_smpl  
+from utils.smpl_utils import qpos_to_smpl, smpl_to_qpose
 
 from env_setup import setup_environment
 from buffer_utils import download_buffer
@@ -20,7 +20,7 @@ from typing import Dict, Any
 from frame_utils import FrameRecorder  # Update import to use existing file
 from cache_utils import RewardContextCache
 from ws_manager import WebSocketManager
-from utils import normalize_q_value
+from utils.utils import normalize_q_value
 from display_utils import DisplayManager
 import traceback  
 
@@ -446,6 +446,71 @@ async def handle_websocket(websocket):
                     }
                     await websocket.send(json.dumps(response))
                 
+                elif message_type == "load_pose_smpl":
+                    try:
+                        print("\nLoading SMPL pose configuration...")
+                        smpl_pose = np.array(data.get("pose", []))
+                        smpl_trans = np.array(data.get("trans", [0, 0, 0.91437225]))
+                        print(f"Received SMPL pose array length: {len(smpl_pose)}")
+                        
+                        if len(smpl_pose) != 72:  # SMPL poses have 72 values (24 joints × 3)
+                            raise ValueError(f"Invalid SMPL pose length: {len(smpl_pose)}, expected 72")
+                        
+                        # Convert SMPL pose to qpos
+                        smpl_pose = torch.tensor(smpl_pose).reshape(1, 72)
+                        smpl_trans = np.array(smpl_trans).reshape(1, 3)
+                        qpos = smpl_to_qpose(smpl_pose, env.unwrapped.model, trans=smpl_trans)
+                        
+                        print("Setting physics with converted qpos...")
+                        env.unwrapped.set_physics(
+                            qpos=qpos.flatten(),  # Use converted qpos
+                            qvel=np.zeros(75)  # Use 75 zeros for qvel
+                        )
+                        
+                        # Get observation and compute context
+                        print("Getting observation...")
+                        goal_obs = torch.tensor(
+                            env.unwrapped.get_obs()["proprio"].reshape(1, -1),
+                            device=model.cfg.device,
+                            dtype=torch.float32
+                        )
+                        
+                        # Use goal inference to get context
+                        inference_type = data.get("inference_type", "goal")
+                        print(f"Using inference type: {inference_type}")
+                        
+                        if inference_type == "goal":
+                            z = model.goal_inference(next_obs=goal_obs)
+                        elif inference_type == "tracking":
+                            z = model.tracking_inference(next_obs=goal_obs)
+                        else:  # context
+                            z = model.context_inference(goal_obs)
+                        
+                        # Update current context
+                        current_z = z
+                        print("Context updated successfully")
+                        
+                        response = {
+                            "type": "pose_loaded",
+                            "status": "success",
+                            "timestamp": datetime.now().isoformat()
+                        }
+                        await websocket.send(json.dumps(response))
+                        print("Success response sent")
+                        
+                    except Exception as e:
+                        error_msg = f"Error loading SMPL pose: {str(e)}"
+                        print(error_msg)
+                        traceback.print_exc()
+                        
+                        response = {
+                            "type": "pose_loaded",
+                            "status": "error",
+                            "error": error_msg,
+                            "timestamp": datetime.now().isoformat()
+                        }
+                        await websocket.send(json.dumps(response))
+
             except json.JSONDecodeError:
                 print("Error: Invalid JSON message")
                 await websocket.send(json.dumps({"error": "Invalid JSON"}))
@@ -552,6 +617,26 @@ async def main():
         model.eval()
         
         env = setup_environment(device)
+        
+        '''
+        # Quick test of smpl_to_qpose with JSON data
+        try:
+            with open('poses_test.json', 'r') as f:
+                test_data = json.load(f)
+                first_pose = test_data['poses'][0]  # Get first pose from the 'poses' array
+                print(f"\nPoints in pose array: {len(first_pose)}")  # Should be 72
+                test_pose = torch.tensor(first_pose).reshape(1, 72)  # Reshape to 1x72
+                test_trans = np.array([0, 0, 0.91437225]).reshape(1, 3)  # Default translation
+                print(f"Points in trans array: {len(test_trans[0])}")  # Should be 3
+                test_qpos = smpl_to_qpose(test_pose, env.unwrapped.model, trans=test_trans)
+                print("\nTest qpos shape:", test_qpos.shape)
+                print("First few values:", test_qpos[0, :5])
+                print("Pose shape:", test_pose.shape)
+                print("Trans shape:", test_trans.shape)
+        except Exception as e:
+            print(f"Test failed: {str(e)}")
+            traceback.print_exc()
+        '''
         
         print("Downloading buffer data...")
         buffer_data = download_buffer()
