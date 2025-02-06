@@ -93,7 +93,8 @@ async def handle_websocket(websocket):
     global current_z, active_rewards, is_computing_reward, frame_recorder
     
     print("\n=== New WebSocket Connection Established ===")
-    ws_manager.add_client(websocket)
+    ws_manager.connected_clients.add(websocket)
+    print(f"Total connections: {len(ws_manager.connected_clients)}")
     
     try:
         async for message in websocket:
@@ -518,7 +519,9 @@ async def handle_websocket(websocket):
     except websockets.exceptions.ConnectionClosed:
         print("Client disconnected")
     finally:
-        ws_manager.remove_client(websocket)
+        ws_manager.connected_clients.discard(websocket)
+        print(f"Client disconnected. Total connections: {len(ws_manager.connected_clients)}")
+        
         if frame_recorder and frame_recorder.recording:
             try:
                 frame_recorder.end_record()
@@ -532,9 +535,6 @@ async def run_simulation():
     global current_z, is_computing_reward, frame_recorder
     observation, _ = env.reset()
     
-    # Create WebSocket connection for SMPL data
-    smpl_socket = await websockets.connect(f'{VITE_WS_URL}/smpl')
-    
     while True:
         # Get action and step environment
         action = model.act(observation, current_z, mean=True)
@@ -542,7 +542,7 @@ async def run_simulation():
         q_percentage = normalize_q_value(q_value)
         observation, _, terminated, truncated, _ = env.step(action.cpu().numpy().ravel())
         
-        # Broadcast pose data
+        # Broadcast pose data using WebSocketManager
         try:
             qpos = env.unwrapped.data.qpos
             pose, trans = qpos_to_smpl(qpos, env.unwrapped.model)
@@ -554,10 +554,12 @@ async def run_simulation():
                 "timestamp": datetime.now().isoformat()
             }
             
-            await broadcast_pose(pose_data)
+            # Use the WebSocketManager's broadcast method
+            await ws_manager.broadcast(pose_data)
             
         except Exception as e:
             print(f"Error broadcasting pose data: {str(e)}")
+            traceback.print_exc()  # Add stack trace for better debugging
         
         # Render and display frame
         frame = env.render()
