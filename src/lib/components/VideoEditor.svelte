@@ -26,17 +26,13 @@
 
   function sendPose(frameNb, customCam = null) {
       const poseToSend = pose.person_1.poses[frameNb];
-      const origCam = customCam || [camX, camY, camZ, scale];
+      const transToSend = pose.person_1.trans[frameNb];
       
-      const fullPose = [
-          ...origCam,
-          ...poseToSend
-      ];
-      
-      console.log('Sending pose for frame', frameNb, fullPose);
+      console.log('Sending pose for frame', frameNb, poseToSend);
       websocketService.send({
-          type: 'load_pose',
-          pose: fullPose,
+          type: 'load_pose_smpl',
+          pose: poseToSend,
+          trans: transToSend,
           inference_type: 'goal'
       });
   }
