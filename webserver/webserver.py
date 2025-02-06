@@ -4,6 +4,7 @@ import uuid
 import traceback
 from datetime import datetime
 import subprocess
+import ffmpeg
 
 # Third-party imports
 from flask import Flask, send_from_directory, request, jsonify, send_file
@@ -174,57 +175,85 @@ def download_file(filename):
 
 @app.route('/upload-video', methods=['POST'])
 def upload_video():
-    if 'video' not in request.files:
+    # Check if video file exists in request
+    if 'video' not in request.files or request.files['video'].filename == '':
         return jsonify({'error': 'No video file provided'}), 400
     
     file = request.files['video']
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
+    
+    # Validate and save file
+    if not allowed_file(file.filename):
+        return jsonify({'error': 'Invalid file type'}), 400
         
-    if file and allowed_file(file.filename):
-        # Generate unique filename
-        filename = secure_filename(f"{str(uuid.uuid4())}_{file.filename}")
-        filepath = os.path.join(UPLOAD_FOLDER, filename)
-        file.save(filepath)
+    # Save file with unique name
+    filename = secure_filename(f"{str(uuid.uuid4())}_{file.filename}")
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    file.save(filepath)
+    
+    # Get and validate parameters
+    trim_sec = min(max(request.form.get('trim', type=int, default=5), 1), 15)
+    start_sec = max(request.form.get('start', type=float, default=0), 0)
+    
+    try:
+        # Get video duration using ffprobe
+        probe = ffmpeg.probe(filepath)
+        duration = float(probe['streams'][0]['duration'])
         
-        # Generate the video URL
-        video_url = f'{VITE_API_URL}/uploads/{filename}'
+        # Validate if there's enough video length for the requested trim
+        if start_sec + trim_sec > duration:
+            return jsonify({
+                'error': 'Invalid trim parameters. The requested start time plus trim duration exceeds the video length.',
+                'video_duration': duration,
+                'requested_duration': start_sec + trim_sec
+            }), 400
+        
+        # Trim video
+        trimmed_filename = f"trimmed_{filename}"
+        trimmed_filepath = os.path.join(UPLOAD_FOLDER, trimmed_filename)
+        
+        # Trim video using FFmpeg with start time
+        ffmpeg.input(filepath).output(
+            trimmed_filepath,
+            r=30,          # Frame rate
+            ss=start_sec,  # Start time
+            t=trim_sec,     # Duration
+            vsync='cfr'  # Constant frame rate
+        ).run()
+        
+        video_url = f'{VITE_API_URL}/uploads/{trimmed_filename}'
         
         # Make prediction request
-        try:
-            prediction_response = requests.post(
-                f'{VITE_VIBE_URL}/predictions',
-                headers={
-                    'accept': 'application/json',
-                    'Content-Type': 'application/json'
-                },
-                json={
-                    "input": {
-                        "media": video_url,
-                        "render_video": True
-                    }
+        response = requests.post(
+            f'{VITE_VIBE_URL}/predictions',
+            headers={'accept': 'application/json', 'Content-Type': 'application/json'},
+            json={
+                "input": {
+                    "media": video_url,
+                    "render_video": True
                 }
-            )
-            print(f'{VITE_VIBE_URL}/predictions',)
-            print(prediction_response.text)
-            prediction_data = prediction_response.json()
-            
-            # Return both the video URL and prediction results
-            return jsonify({
-                'success': True,
-                'video_url': video_url,
-                'prediction': prediction_data
-            })
-            
-        except requests.exceptions.RequestException as e:
-            print(f"Prediction error: {str(e)}")
-            return jsonify({
-                'success': True,
-                'video_url': video_url,
-                'prediction_error': 'Failed to get prediction'
-            })
-    
-    return jsonify({'error': 'Invalid file type'}), 400
+            },
+            timeout=600
+        )
+
+        response.raise_for_status()
+        
+        return json.dumps({
+            'success': True,
+            'video_url': video_url,
+            'prediction': response.json(),
+            'video_info': {
+                'original_duration': duration,
+                'trim_start': start_sec,
+                'trim_duration': trim_sec
+            }
+        })
+        
+    except ffmpeg.Error as e:
+        return jsonify({'error': 'Failed to trim video', 'details': str(e)}), 500
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': f'Prediction failed: {str(e)}'}), 500
+    except Exception as e:
+        return jsonify({'error': f'Unexpected error: {str(e)}'}), 500
 
 @app.route('/uploads/<path:filename>')
 def serve_video(filename):

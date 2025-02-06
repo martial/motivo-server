@@ -19,6 +19,7 @@ RUN apt-get update && apt-get install -y \
     libxi-dev \
     libxkbcommon-dev \
     libxkbcommon-x11-dev \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Set environment variables

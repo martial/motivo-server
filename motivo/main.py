@@ -31,7 +31,7 @@ BACKEND_DOMAIN = os.getenv("VITE_BACKEND_DOMAIN", "localhost")
 WS_PORT = os.getenv("VITE_WS_PORT", 8765)
 API_PORT = os.getenv("VITE_API_PORT", 5000)
 WEBSERVER_PORT = os.getenv("VITE_WEBSERVER_PORT", 5002)
-
+VITE_WS_URL = os.getenv("VITE_WS_URL", f"ws://{BACKEND_DOMAIN}:{WS_PORT}")
 # Global variables
 model = None
 env = None
@@ -466,6 +466,9 @@ async def run_simulation():
     """Continuous simulation loop"""
     global current_z, is_computing_reward, frame_recorder
     observation, _ = env.reset()
+    
+    # Create WebSocket connection for SMPL data
+    smpl_socket = await websockets.connect(f'{VITE_WS_URL}/smpl')
     
     while True:
         # Get action and step environment
