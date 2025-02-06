@@ -288,39 +288,6 @@ def serve_video(filename):
         print(f"Error serving video: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-def get_git_info():
-    try:
-        commit_hash = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('ascii').strip()
-        # Get the last commit date on main branch - fixed command
-        last_commit_date = subprocess.check_output(
-            ['git', 'log', '-1', '--format=%cd', '--date=iso'],
-            stderr=subprocess.DEVNULL
-        ).decode('ascii').strip()
-        
-        try:
-            version = subprocess.check_output(['git', 'describe', '--tags', '--abbrev=0']).decode('ascii').strip()
-        except subprocess.CalledProcessError:
-            version = 'v0.0.0'
-            
-        return {
-            'version': version,
-            'commitHash': commit_hash,
-            'lastCommitDate': last_commit_date,
-            'environment': 'production' if not app.debug else 'development'
-        }
-    except Exception as e:
-        print(f"Error getting git info: {e}")
-        return {
-            'version': 'local',
-            'commitHash': 'development',
-            'lastCommitDate': datetime.utcnow().isoformat(),
-            'environment': 'development' if app.debug else 'production'
-        }
-
-@app.route('/api/version')
-def get_version():
-    return jsonify(get_git_info())
-
 @app.route('/clear-chat', methods=['POST'])
 def clear_chat():
     try:

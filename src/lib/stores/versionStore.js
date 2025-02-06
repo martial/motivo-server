@@ -1,9 +1,9 @@
 import { writable } from "svelte/store";
 
 export const versionInfo = writable({
-  version: "loading...",
-  commitHash: "loading...",
-  lastCommitDate: "",
+  version: "local",
+  commitHash: "development",
+  lastCommitDate: new Date().toISOString(),
   environment: import.meta.env.DEV ? "development" : "production",
 });
 

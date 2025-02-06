@@ -16,6 +16,14 @@
   let camZ = 0;
   let scale = 2;
 
+  // Add SMPL pose parameters
+  let normalize = false;
+  let randomRoot = false;
+  let countOffset = true;
+  let useQuat = false;
+  let eulerOrder = "ZYX";
+  let modelType = "smpl";
+
   function msToFrame(timeInSeconds) {
       return Math.floor(timeInSeconds * FPS);
   }
@@ -33,7 +41,14 @@
           type: 'load_pose_smpl',
           pose: poseToSend,
           trans: transToSend,
-          inference_type: 'goal'
+          inference_type: 'goal',
+          // Add SMPL parameters
+          normalize,
+          random_root: randomRoot,
+          count_offset: countOffset,
+          use_quat: useQuat,
+          euler_order: eulerOrder,
+          model: modelType
       });
   }
 
@@ -129,6 +144,76 @@
               </div>
           </div>
 
+          <!-- SMPL Parameters -->
+          <div class="space-y-4">
+              <h3 class="font-semibold">SMPL Parameters</h3>
+              
+              <div class="flex items-center gap-4">
+                  <label class="w-32">Normalize:</label>
+                  <input 
+                      type="checkbox"
+                      bind:checked={normalize}
+                      class="form-checkbox"
+                      on:change={() => sendPose(frame)}
+                  />
+              </div>
+
+              <div class="flex items-center gap-4">
+                  <label class="w-32">Random Root:</label>
+                  <input 
+                      type="checkbox"
+                      bind:checked={randomRoot}
+                      class="form-checkbox"
+                      on:change={() => sendPose(frame)}
+                  />
+              </div>
+
+              <div class="flex items-center gap-4">
+                  <label class="w-32">Count Offset:</label>
+                  <input 
+                      type="checkbox"
+                      bind:checked={countOffset}
+                      class="form-checkbox"
+                      on:change={() => sendPose(frame)}
+                  />
+              </div>
+
+              <div class="flex items-center gap-4">
+                  <label class="w-32">Use Quaternion:</label>
+                  <input 
+                      type="checkbox"
+                      bind:checked={useQuat}
+                      class="form-checkbox"
+                      on:change={() => sendPose(frame)}
+                  />
+              </div>
+
+              <div class="flex items-center gap-4">
+                  <label class="w-32">Euler Order:</label>
+                  <select 
+                      bind:value={eulerOrder}
+                      class="form-select"
+                      on:change={() => sendPose(frame)}
+                  >
+                      <option value="ZYX">ZYX</option>
+                      <option value="XYZ">XYZ</option>
+                      <option value="YZX">YZX</option>
+                  </select>
+              </div>
+
+              <div class="flex items-center gap-4">
+                  <label class="w-32">Model Type:</label>
+                  <select 
+                      bind:value={modelType}
+                      class="form-select"
+                      on:change={() => sendPose(frame)}
+                  >
+                      <option value="smpl">SMPL</option>
+                      <option value="smplh">SMPL-H</option>
+                  </select>
+              </div>
+          </div>
+
           <button 
               class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors w-full"
               on:click={() => sendPose(frame)}
@@ -158,5 +243,13 @@
   video::-webkit-media-controls-timeline {
       display: block;
       margin: 0;
+  }
+
+  .form-checkbox {
+    @apply h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500;
+  }
+
+  .form-select {
+    @apply block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500;
   }
 </style>

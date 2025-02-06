@@ -109,7 +109,7 @@ def smpl_to_qpose(
     random_root=False,
     count_offset=True,
     use_quat=False,
-    euler_order="XYZ",
+    euler_order="ZYX",
     model="smpl",
 ):
     """

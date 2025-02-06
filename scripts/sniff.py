@@ -6,8 +6,8 @@ import json
 logging.basicConfig(level=logging.DEBUG)
 
 async def listen_smpl():
-    #uri = "ws://51.159.163.145:8765"  # Try port 8443
-    uri = "ws://localhost:8765"
+    uri = "ws://51.159.163.145:8765"  # Try port 8443
+    #uri = "ws://localhost:8765"
     async with websockets.connect(uri) as websocket:
         print("Connected!")
         while True:

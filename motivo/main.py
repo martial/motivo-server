@@ -452,15 +452,37 @@ async def handle_websocket(websocket):
                         print("\nLoading SMPL pose configuration...")
                         smpl_pose = np.array(data.get("pose", []))
                         smpl_trans = np.array(data.get("trans", [0, 0, 0.91437225]))
+                        
+                        # Add new parameters with defaults
+                        normalize = data.get("normalize", False)
+                        random_root = data.get("random_root", False)
+                        count_offset = data.get("count_offset", True)
+                        use_quat = data.get("use_quat", False)
+                        euler_order = data.get("euler_order", "ZYX")  # Using ZYX as default
+                        model_type = data.get("model", "smpl")  # Can be "smpl" or "smplh"
+                        
                         print(f"Received SMPL pose array length: {len(smpl_pose)}")
+                        print(f"Parameters: normalize={normalize}, random_root={random_root}, "
+                              f"count_offset={count_offset}, use_quat={use_quat}, "
+                              f"euler_order={euler_order}, model={model_type}")
                         
                         if len(smpl_pose) != 72:  # SMPL poses have 72 values (24 joints × 3)
                             raise ValueError(f"Invalid SMPL pose length: {len(smpl_pose)}, expected 72")
                         
-                        # Convert SMPL pose to qpos
+                        # Convert SMPL pose to qpos with additional parameters
                         smpl_pose = torch.tensor(smpl_pose).reshape(1, 72)
                         smpl_trans = np.array(smpl_trans).reshape(1, 3)
-                        qpos = smpl_to_qpose(smpl_pose, env.unwrapped.model, trans=smpl_trans)
+                        qpos = smpl_to_qpose(
+                            pose=smpl_pose,
+                            mj_model=env.unwrapped.model,
+                            trans=smpl_trans,
+                            normalize=normalize,
+                            random_root=random_root,
+                            count_offset=count_offset,
+                            use_quat=use_quat,
+                            euler_order=euler_order,
+                            model=model_type
+                        )
                         
                         print("Setting physics with converted qpos...")
                         env.unwrapped.set_physics(
