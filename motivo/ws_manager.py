@@ -1,46 +1,59 @@
-import websockets
+import asyncio
 from typing import Set, Dict, Any
 import json
+import websockets
 from datetime import datetime
 
 class WebSocketManager:
     def __init__(self):
+        self._lock = asyncio.Lock()
         self.connected_clients: Set[websockets.WebSocketServerProtocol] = set()
         self.unique_clients: Set[str] = set()
     
-    def add_client(self, websocket: websockets.WebSocketServerProtocol):
-        """Add new client connection and track IP"""
-        client_ip = websocket.remote_address[0]
-        self.connected_clients.add(websocket)
-        self.unique_clients.add(client_ip)
-        print(f"\nNew client connected:")
-        print(f"Connected clients: {len(self.connected_clients)}")
-        print(f"Unique IPs: {len(self.unique_clients)}")
+    async def add_client(self, websocket: websockets.WebSocketServerProtocol) -> None:
+        """Safely add a new client connection"""
+        async with self._lock:
+            self.connected_clients.add(websocket)
+            # Add unique identifier (using websocket id or connection info)
+            client_id = str(id(websocket))
+            self.unique_clients.add(client_id)
+            print(f"Client added. Total connections: {len(self.connected_clients)}")
     
-    def remove_client(self, websocket: websockets.WebSocketServerProtocol):
-        """Remove client connection and update IP tracking"""
-        client_ip = websocket.remote_address[0]
-        self.connected_clients.remove(websocket)
-        # Only remove IP if no other connections from that IP
-        if not any(ws.remote_address[0] == client_ip for ws in self.connected_clients):
-            self.unique_clients.remove(client_ip)
-        print(f"\nClient disconnected:")
-        print(f"Connected clients: {len(self.connected_clients)}")
-        print(f"Unique IPs: {len(self.unique_clients)}")
-    
-    async def broadcast(self, message: Dict[str, Any]):
-        """Broadcast message to all connected clients"""
-        disconnected_clients = set()
-        
-        for client in self.connected_clients:
+    async def remove_client(self, websocket: websockets.WebSocketServerProtocol) -> None:
+        """Safely remove a client connection"""
+        async with self._lock:
             try:
-                await client.send(json.dumps(message))
+                self.connected_clients.remove(websocket)
+                # Remove unique identifier
+                client_id = str(id(websocket))
+                self.unique_clients.discard(client_id)
+                print(f"Client removed. Total connections: {len(self.connected_clients)}")
+            except KeyError:
+                print("Warning: Attempted to remove non-existent client")
+    
+    async def broadcast(self, message: Dict[Any, Any]) -> None:
+        """Safely broadcast a message to all connected clients"""
+        if not isinstance(message, str):
+            message = json.dumps(message)
+
+        # Create a copy of connected clients to avoid modification during iteration
+        async with self._lock:
+            clients = self.connected_clients.copy()
+
+        # Send to all clients, handling disconnections
+        disconnected = set()
+        for websocket in clients:
+            try:
+                await websocket.send(message)
             except websockets.exceptions.ConnectionClosed:
-                disconnected_clients.add(client)
-        
+                disconnected.add(websocket)
+            except Exception as e:
+                print(f"Error broadcasting to client: {str(e)}")
+                disconnected.add(websocket)
+
         # Remove disconnected clients
-        for client in disconnected_clients:
-            self.remove_client(client)
+        for websocket in disconnected:
+            await self.remove_client(websocket)
     
     def get_stats(self) -> Dict[str, int]:
         """Get current connection statistics"""

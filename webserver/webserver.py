@@ -222,6 +222,8 @@ def upload_video():
         
         video_url = f'{VITE_API_URL}/uploads/{trimmed_filename}'
         
+        print(f"Video URL: {video_url}")
+        print(f"VITE_VIBE_URL: {VITE_VIBE_URL}")
         # Make prediction request
         response = requests.post(
             f'{VITE_VIBE_URL}/predictions',
@@ -234,6 +236,8 @@ def upload_video():
             },
             timeout=600
         )
+
+        print(f"Response: {response}")
 
         response.raise_for_status()
         
@@ -248,8 +252,9 @@ def upload_video():
             }
         })
         
-    except ffmpeg.Error as e:
-        return jsonify({'error': 'Failed to trim video', 'details': str(e)}), 500
+    except Exception as e:
+        print(f"FFmpeg error: {str(e)}")
+        return jsonify({"error": "Video processing failed"}), 500
     except requests.exceptions.RequestException as e:
         return jsonify({'error': f'Prediction failed: {str(e)}'}), 500
     except Exception as e:
