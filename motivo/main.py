@@ -25,6 +25,7 @@ from display_utils import DisplayManager
 import traceback  # Add this at the top with other imports
 
 
+
 # import from env BACKEND_DOMAIN
 BACKEND_DOMAIN = os.getenv("VITE_BACKEND_DOMAIN", "localhost")
 WS_PORT = os.getenv("VITE_WS_PORT", 8765)
