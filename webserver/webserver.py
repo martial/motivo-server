@@ -68,7 +68,7 @@ CORS(app, resources={
 
 # Load system instructions at startup
 try:
-    with open('position_instructions.txt', 'r', encoding='utf-8') as f:
+    with open('system_instructions.txt', 'r', encoding='utf-8') as f:
         SYSTEM_INSTRUCTIONS = f.read()
     print("Successfully loaded system instructions")
 except Exception as e:
