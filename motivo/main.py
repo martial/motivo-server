@@ -14,7 +14,7 @@ from smpl_utils import qpos_to_smpl
 from env_setup import setup_environment
 from buffer_utils import download_buffer
 from reward_context import compute_reward_context, compute_q_value
-from custom_rewards import print_model_info, list_model_body_names, print_available_rewards
+from task_rewards import print_model_info, list_model_body_names, print_available_rewards
 from humenv import rewards as humenv_rewards
 from typing import Dict, Any
 from frame_utils import FrameRecorder  # Update import to use existing file
@@ -22,7 +22,7 @@ from cache_utils import RewardContextCache
 from ws_manager import WebSocketManager
 from utils import normalize_q_value
 from display_utils import DisplayManager
-import traceback  # Add this at the top with other imports
+import traceback  
 
 
 
@@ -55,17 +55,30 @@ async def get_reward_context(reward_config):
         is_computing_reward = True
         print("\n=== Reward Context Computation ===")
         print("Computing... ⚙️")
-        #print(f"Input config: {json.dumps(reward_config, indent=2)}")
         
-        loop = asyncio.get_event_loop()
-        z = await loop.run_in_executor(
-            thread_pool, 
-            compute_reward_context, 
-            reward_config, 
-            env, 
-            model, 
+        # Notify clients that computation started
+        await ws_manager.broadcast({
+            "type": "reward_computation",
+            "status": "started",
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        # Using asyncio.to_thread instead of ThreadPoolExecutor
+        z = await asyncio.to_thread(
+            compute_reward_context,
+            reward_config,
+            env,
+            model,
             buffer_data
         )
+        
+        # Notify clients that computation is complete
+        await ws_manager.broadcast({
+            "type": "reward_computation",
+            "status": "completed",
+            "timestamp": datetime.now().isoformat()
+        })
+        
         return z
     finally:
         is_computing_reward = False
@@ -215,9 +228,19 @@ async def handle_websocket(websocket):
                 elif message_type == "request_reward":
                     print("\n=== Processing Reward Combination ===")
                     
+                    if is_computing_reward:
+                        print("⚠️ Reward computation already in progress, request ignored")
+                        response = {
+                            "type": "reward",
+                            "status": "computing_in_progress",
+                            "timestamp": data.get("timestamp", ""),
+                            "is_computing": True
+                        }
+                        await websocket.send(json.dumps(response))
+                        return
+                    
                     # Update active rewards
                     active_rewards = data['reward']
-                    
                     current_z = await context_cache.get_cached_context(active_rewards, get_reward_context)
                     
                     response = {

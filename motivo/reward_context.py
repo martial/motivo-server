@@ -1,11 +1,9 @@
-
-
 import numpy as np
 import torch
 from humenv import rewards as humenv_rewards
 from humenv.env import make_from_name
 from metamotivo.wrappers.humenvbench import relabel
-from custom_rewards import (
+from task_rewards import (
     StayUprightReward,
     HeadHeightReward,
     PelvisHeightReward,
@@ -25,6 +23,22 @@ from custom_rewards import (
     RightFootForwardDistanceReward,
     print_available_rewards
 )
+from behaviour_rewards import (
+    StandingReward,
+    UprightReward,
+    MovementControlReward,
+    SmallControlReward,
+    PositionReward,
+    BalanceReward,
+    SymmetryReward,
+    EnergyEfficiencyReward,
+    NaturalMotionReward,
+    GazeDirectionReward,
+    GroundContactReward,
+    StableStandingReward,
+    NaturalWalkingReward
+)
+from position_rewards import PositionReward, PositionTarget
 import inspect
 import sys
 import contextlib
@@ -54,7 +68,7 @@ def create_reward_function(reward_type, weight):
         return (humenv_rewards.RotationReward(
             axis=reward_type.get('axis', 'x'),
             target_ang_velocity=reward_type.get('target_ang_velocity', 5.0),
-            stand_pelvis_height=reward_type.get('stand_pelvis_height', 0.8)
+            stand_pelvis_height=reward_type.get('stand_pelvis_height', 0.95)
         ), weight)
     elif name == 'crawl':
         return (humenv_rewards.CrawlReward(
@@ -73,19 +87,21 @@ def create_reward_function(reward_type, weight):
         ), weight)
     elif name == 'headstand':
         return (humenv_rewards.HeadstandReward(
-            balance_factor=reward_type.get('balance_factor', 1.0)
+            stand_pelvis_height=reward_type.get('stand_pelvis_height', 0.95)
         ), weight)
     elif name == 'liedown':
         return (humenv_rewards.LieDownReward(
-            target_height=reward_type.get('target_height', 0.2)
+            direction=reward_type.get('direction', 'up')
         ), weight)
     elif name == 'sit':
-        return (humenv_rewards.SitReward(
-            target_height=reward_type.get('target_height', 0.6)
+        return (humenv_rewards.SitOnGroundReward(
+            pelvis_height_th=reward_type.get('pelvis_height_th', 0),
+            constrained_knees=reward_type.get('constrained_knees', True),
+            knees_not_on_ground=reward_type.get('knees_not_on_ground', False)
         ), weight)
     elif name == 'split':
         return (humenv_rewards.SplitReward(
-            target_angle=reward_type.get('target_angle', 180)
+            distance=reward_type.get('distance', 1.5)
         ), weight)
     
     # Handle custom reward types with consistent parameter naming
@@ -144,12 +160,95 @@ def create_reward_function(reward_type, weight):
             stay_low=reward_type.get('stay_low', False),
             egocentric_target=reward_type.get('egocentric_target', True),
             arm_coeff=reward_type.get('arm_coeff', 1.0),
-            loc_coeff=reward_type.get('loc_coeff', 1.0)
+            loc_coeff=reward_type.get('loc_coeff', 1.0),
+            visualize_target_angle=reward_type.get('visualize_target_angle', True)
         ), weight)
     
     # Handle custom reward types not in humenv.rewards
     elif name == 'stay-upright':
         return (StayUprightReward(), weight)
+    
+    # Handle behaviour rewards
+    elif name == 'standing':
+        return (StandingReward(
+            target_height=reward_type.get('target_height', 1.4),
+            margin=reward_type.get('margin', 0.2)
+        ), weight)
+    elif name == 'upright':
+        return (UprightReward(
+            min_upright=reward_type.get('min_upright', 0.9),
+            margin=reward_type.get('margin', 1.9)
+        ), weight)
+    elif name == 'movement-control':
+        return (MovementControlReward(
+            margin=reward_type.get('margin', 0.5)
+        ), weight)
+    elif name == 'small-control':
+        return (SmallControlReward(
+            margin=reward_type.get('margin', 1.0),
+            weight=reward_type.get('control_weight', 0.8)
+        ), weight)
+    elif name == 'position':
+        # Adapt to match the WebSocket API format
+        targets = {}
+        for target in reward_type.get('targets', []):
+            body_name = target['body']
+            targets[body_name] = PositionTarget(
+                x=target.get('x'),
+                y=target.get('y'),
+                z=target.get('z'),
+                weight=target.get('weight', 1.0),
+                margin=target.get('margin', 0.2)
+            )
+        
+        return (PositionReward(
+            targets=targets,
+            upright_weight=reward_type.get('upright_weight', 0.3),
+            control_weight=reward_type.get('control_weight', 0.2)
+        ), weight)
+    elif name == 'balance':
+        return (BalanceReward(
+            margin=reward_type.get('margin', 0.2)
+        ), weight)
+    elif name == 'symmetry':
+        return (SymmetryReward(
+            weight_hands=reward_type.get('weight_hands', 0.5),
+            weight_feet=reward_type.get('weight_feet', 0.5),
+            margin=reward_type.get('margin', 0.2)
+        ), weight)
+    elif name == 'energy-efficiency':
+        return (EnergyEfficiencyReward(
+            vel_margin=reward_type.get('vel_margin', 1.0),
+            ctrl_margin=reward_type.get('ctrl_margin', 0.5)
+        ), weight)
+    elif name == 'natural-motion':
+        return (NaturalMotionReward(
+            smoothness_weight=reward_type.get('smoothness_weight', 0.5),
+            coordination_weight=reward_type.get('coordination_weight', 0.5)
+        ), weight)
+    elif name == 'gaze-direction':
+        return (GazeDirectionReward(
+            target_point=np.array(reward_type.get('target_point', [1.0, 0.0, 1.7])),
+            angle_margin=reward_type.get('angle_margin', 0.5)
+        ), weight)
+    elif name == 'ground-contact':
+        return (GroundContactReward(
+            desired_contacts=reward_type.get('desired_contacts', ['L_Toe', 'R_Toe'])
+        ), weight)
+    elif name == 'stable-standing':
+        return (StableStandingReward(
+            standing_weight=reward_type.get('standing_weight', 0.3),
+            upright_weight=reward_type.get('upright_weight', 0.3),
+            balance_weight=reward_type.get('balance_weight', 0.2),
+            control_weight=reward_type.get('control_weight', 0.2)
+        ), weight)
+    elif name == 'natural-walking':
+        return (NaturalWalkingReward(
+            balance_weight=reward_type.get('balance_weight', 0.3),
+            energy_weight=reward_type.get('energy_weight', 0.2),
+            symmetry_weight=reward_type.get('symmetry_weight', 0.2),
+            natural_motion_weight=reward_type.get('natural_motion_weight', 0.3)
+        ), weight)
     else:
         raise ValueError(f"Unknown reward type: {name}")
 
@@ -425,4 +524,31 @@ def print_available_rewards():
     
     print("\n=== Configurable Rewards ===")
     print("  - move-ego (params: move_speed, stand_height, move_angle, egocentric_target, low_height, stay_low)")
-    print("  - move-and-raise-arms (params: move_speed, move_angle, left_pose, right_pose, stand_height, low_height, stay_low, egocentric_target, arm_coeff, loc_coeff)") 
+    print("  - move-and-raise-arms (params: move_speed, move_angle, left_pose, right_pose, stand_height, low_height, stay_low, egocentric_target, arm_coeff, loc_coeff)")
+    
+    print("\n=== Behaviour Rewards ===")
+    behaviour_rewards = [
+        "standing (params: target_height, margin)",
+        "upright (params: min_upright, margin)",
+        "movement-control (params: margin)",
+        "small-control (params: margin, control_weight)",
+        "position (params: body_name, target_pos, margin)",
+        "balance (params: margin)",
+        "symmetry (params: weight_hands, weight_feet, margin)",
+        "energy-efficiency (params: vel_margin, ctrl_margin)",
+        "natural-motion (params: smoothness_weight, coordination_weight)",
+        "gaze-direction (params: target_point, angle_margin)",
+        "ground-contact (params: desired_contacts)"
+    ]
+    
+    for reward in behaviour_rewards:
+        print(f"  - {reward}")
+    
+    print("\n=== Combined Behaviour Rewards ===")
+    combined_rewards = [
+        "stable-standing (params: standing_weight, upright_weight, balance_weight, control_weight)",
+        "natural-walking (params: balance_weight, energy_weight, symmetry_weight, natural_motion_weight)"
+    ]
+    
+    for reward in combined_rewards:
+        print(f"  - {reward}") 

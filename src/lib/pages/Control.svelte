@@ -30,6 +30,18 @@
         localStorage.setItem('controlActivePanel', activePanel);
     });
 
+    let isTestingAll = $state(false);
+    
+    function handleTestAll() {
+        if (isTestingAll) {
+            rewardStore.stopTesting();
+            isTestingAll = false;
+        } else {
+            rewardStore.startTestingAllOptions();
+            isTestingAll = true;
+        }
+    }
+
     onMount(() => {
         cleanupListener = websocketService.onReadyStateChange((ready) => {
             isSocketReady = ready;
@@ -40,6 +52,7 @@
     
     onDestroy(() => {
         if (cleanupListener) cleanupListener();
+        rewardStore.stopTesting(); // Ensure we clean up testing on component destroy
     });
 </script>
   
@@ -49,6 +62,14 @@
         <div class="w-[420px] flex flex-col gap-8 bg-blue-100/50 p-4 rounded-xl">
             <LiveFeed />
             <ParameterPanel class="flex-1 min-w-[400px]" />
+            
+            <!-- Add Test All button -->
+            <button 
+                class="w-full px-4 py-2 rounded-lg font-medium transition-colors {isTestingAll ? 'bg-red-500 text-white' : 'bg-blue-500 text-white'}"
+                onclick={handleTestAll}
+            >
+                {isTestingAll ? 'Stop Testing' : 'Test All Options'}
+            </button>
         </div>
 
         <!-- Right side content -->

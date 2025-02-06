@@ -22,6 +22,12 @@
     ],
     'Other Controls': [
       'stay-upright', 'head-height', 'pelvis-height'
+    ],
+    'Behavior Rewards': [
+      'standing', 'upright', 'movement-control', 'small-control',
+      'position', 'balance', 'symmetry', 'energy-efficiency',
+      'natural-motion', 'gaze-direction', 'ground-contact',
+      'stable-standing', 'natural-walking'
     ]
   };
 
