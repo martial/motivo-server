@@ -299,5 +299,51 @@ def clear_chat():
         print(f"Error clearing chat: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+
+#### DATABASE STUFF ####
+
+@app.route('/api/vibeconf', methods=['POST'])
+def create_vibe():
+   try:
+       data = request.json
+       db = VibeTable()
+       vibe_id = db.add(
+           title=data['title'],
+           thumbnail=data['thumbnail'],
+           video=data['video'],
+           frame=data['frame'],
+           pose=data['pose']
+       )
+       return jsonify({'id': vibe_id}), 201
+   except Exception as e:
+       return jsonify({'error': str(e)}), 500
+
+@app.route('/api/vibeconf/<int:vibe_id>', methods=['PUT'])
+def update_vibe(vibe_id):
+   try:
+       data = request.json
+       db = VibeTable()
+       db.update(
+           id=vibe_id,
+           title=data.get('title'),
+           thumbnail=data.get('thumbnail'),
+           video=data.get('video'),
+           frame=data.get('frame'),
+           pose=data.get('pose')
+       )
+       return jsonify({'success': True})
+   except Exception as e:
+       return jsonify({'error': str(e)}), 500
+
+@app.route('/api/vibeconf/<int:vibe_id>', methods=['DELETE'])
+def delete_vibe(vibe_id):
+   try:
+       db = VibeTable()
+       db.delete(vibe_id)
+       return jsonify({'success': True})
+   except Exception as e:
+       return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5002, debug=True)
