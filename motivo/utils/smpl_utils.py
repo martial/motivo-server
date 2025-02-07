@@ -90,7 +90,6 @@ def qpos_to_smpl(qpos, mj_model, smpl_model="smpl"):
         trans: Global translation (batch_size x 3)
         positions: List of global joint positions
     """
-    # Create MuJoCo data instance for forward kinematics
     mj_data = mujoco.MjData(mj_model)
     body_qposaddr = get_body_qposaddr(mj_model)
     
@@ -98,7 +97,6 @@ def qpos_to_smpl(qpos, mj_model, smpl_model="smpl"):
     if hasattr(qpos, 'detach'):
         qpos = qpos.detach().cpu().numpy()
     
-    # Ensure qpos is 2D
     if len(qpos.shape) == 1:
         qpos = qpos.reshape(1, -1)
     
@@ -107,108 +105,124 @@ def qpos_to_smpl(qpos, mj_model, smpl_model="smpl"):
     smpl_bones_to_use = (SMPL_BONE_ORDER_NAMES if smpl_model == "smpl" else SMPLH_BONE_ORDER_NAMES)
     pose = np.zeros([batch_size, len(smpl_bones_to_use), 3])
     positions = []
+    position_names = []
 
     # Copy qpos to MuJoCo data
-    mj_data.qpos[:] = qpos[0]  # Use first batch element
-    
-    # Compute forward kinematics
+    mj_data.qpos[:] = qpos[0]
     mujoco.mj_kinematics(mj_model, mj_data)
+
+    # Create mapping of bone names to MuJoCo body indices
+    body_name_to_id = {mj_model.body(i).name: i for i in range(mj_model.nbody)}
 
     # Get root position and orientation
     root_pos = qpos[:, :3]
     root_quat = qpos[:, 3:7]
     pose[:, 0, :] = sRot.from_quat(root_quat[:, [1, 2, 3, 0]]).as_rotvec()
     positions.append(root_pos[0])
+    position_names.append("Pelvis")
 
-    # Get other joint rotations and positions from MuJoCo
+    # Get other joint rotations and positions using correct body indices
     for ind1, bone_name in enumerate(smpl_bones_to_use[1:], 1):
         ind2 = body_qposaddr[bone_name]
-        # Get global position from MuJoCo's forward kinematics
-        positions.append(mj_data.xpos[ind1 + 1])
+        # Get correct MuJoCo body index for this bone
+        mj_body_id = body_name_to_id[bone_name]
+        # Get global position using correct body index
+        positions.append(mj_data.xpos[mj_body_id])
+        position_names.append(bone_name)
         # Get joint angles from qpos
         pose[:, ind1, :] = sRot.from_euler("XYZ", qpos[:, ind2[0]:ind2[1]]).as_rotvec()
 
-    return pose, trans, positions
+    # Validation checks
+    assert len(positions) == len(SMPL_BONE_ORDER_NAMES), (
+        f"Number of positions ({len(positions)}) doesn't match "
+        f"SMPL_BONE_ORDER_NAMES ({len(SMPL_BONE_ORDER_NAMES)})"
+    )
+    assert position_names == SMPL_BONE_ORDER_NAMES, (
+        f"Position order mismatch!\nExpected: {SMPL_BONE_ORDER_NAMES}\nGot: {position_names}"
+    )
 
-def smpl_to_qpose(
-    pose,
-    mj_model,
-    trans=None,
-    normalize=True,
-    random_root=False,
-    count_offset=True,
-    use_quat=False,
-    euler_order="ZYX",
-    model="smpl",
-    target_rotation=None
-):
-    """
-    Convert SMPL pose to qpose format.
+    return pose, trans, positions, position_names
+
+
+def smpl_to_qpose(pose, trans, mj_model, smpl_model="smpl"):
+    """Convert SMPL pose parameters to MuJoCo qpos.
     
     Args:
-        pose: SMPL pose (batch_size x 72)
+        pose: SMPL pose parameters (batch_size x num_joints x 3)
+        trans: Global translation (batch_size x 3)
         mj_model: MuJoCo model
-        trans: Translation vector (batch_size x 3)
-        normalize: Whether to normalize the pose
-        random_root: Apply random rotation around Y-axis
-        count_offset: Include model offset in translation
-        use_quat: Use quaternion representation
-        euler_order: Order of Euler angles
-        model: Model type ("smpl" or "smplh")
-        target_rotation: Dict with target rotations in degrees (optional)
-            e.g., {'x': 0, 'y': 90, 'z': 0}
+        smpl_model: Model type ("smpl" or "smplh")
+    
+    Returns:
+        qpos: Joint positions array (batch_size x nq)
     """
-    if trans is None:
-        trans = np.zeros((pose.shape[0], 3))
-        trans[:, 2] = 0.91437225
+    # Convert inputs to numpy if they're torch tensors
+    if hasattr(pose, 'detach'):
+        pose = pose.detach().cpu().numpy()
+    if hasattr(trans, 'detach'):
+        trans = trans.detach().cpu().numpy()
+        
+    # Ensure inputs are 2D
+    if len(pose.shape) == 2:
+        pose = pose.reshape(1, -1, 3)
+    if len(trans.shape) == 1:
+        trans = trans.reshape(1, -1)
+        
+    batch_size = pose.shape[0]
+    nq = mj_model.nq
+    body_qposaddr = get_body_qposaddr(mj_model)
+    smpl_bones_to_use = (SMPL_BONE_ORDER_NAMES if smpl_model == "smpl" else SMPLH_BONE_ORDER_NAMES)
     
-    if normalize:
-        pose, trans = normalize_smpl_pose(pose, trans, random_root=random_root, target_rotation=target_rotation)
-    elif target_rotation is not None:
-        pose, trans = rotate_smpl_pose(pose, trans, target_rotation=target_rotation)
-
-    if not torch.is_tensor(pose):
-        pose = torch.tensor(pose)
-
-    if model == "smpl":
-        joint_names = SMPL_BONE_ORDER_NAMES
-        if pose.shape[-1] == 156:
-            pose = smplh_to_smpl(pose)
-    elif model == "smplx":
-        joint_names = SMPLH_BONE_ORDER_NAMES
-        if pose.shape[-1] == 72:
-            pose = smpl_to_smplh(pose)
-
-    num_joints = len(joint_names)
-    num_angles = num_joints * 3
-    smpl_2_mujoco = [joint_names.index(q) for q in list(get_body_qposaddr(mj_model).keys()) if q in joint_names]
-
-    pose = pose.reshape(-1, num_angles)
-
-    curr_pose_mat = angle_axis_to_rotation_matrix(pose.reshape(-1, 3)).reshape(pose.shape[0], -1, 4, 4)
+    qpos = np.zeros([batch_size, nq])
     
-    # Try different rotation sequence
-    initial_rotation = sRot.from_euler('xyz', [0.0, 0, 0]).as_matrix()  # X to stand up, Z to face forward
-    curr_pose_mat[:, 0, :3, :3] = np.matmul(initial_rotation, curr_pose_mat[:, 0, :3, :3])
-
-    curr_spose = sRot.from_matrix(curr_pose_mat[:, :, :3, :3].reshape(-1, 3, 3).numpy())
-    if use_quat:
-        curr_spose = curr_spose.as_quat()[:, [3, 0, 1, 2]].reshape(curr_pose_mat.shape[0], -1)
-        num_angles = num_joints * (4 if use_quat else 3)
-    else:
-        curr_spose = curr_spose.as_euler(euler_order, degrees=False).reshape(curr_pose_mat.shape[0], -1)
-
-    curr_spose = curr_spose.reshape(-1, num_joints, 4 if use_quat else 3)[:, smpl_2_mujoco, :].reshape(-1, num_angles)
-    if use_quat:
-        curr_qpos = np.concatenate([trans, curr_spose], axis=1)
-    else:
-        root_quat = rotation_matrix_to_quaternion(curr_pose_mat[:, 0, :3, :])
-        curr_qpos = np.concatenate((trans, root_quat, curr_spose[:, 3:]), axis=1)
-
-    if count_offset:
-        curr_qpos[:, :3] = trans + mj_model.body_pos[1]
-
-    return curr_qpos
+    # Print initial translation for debugging
+    print(f"Initial trans Z: {trans[0, 2]}")
+    print(f"Model body pos: {mj_model.body_pos[1]}")
+    
+    # Add a small base height if starting from 0
+    if trans[0, 2] == 0:
+        trans[:, 2] = 0.91437225  # Standard SMPL height offset
+    
+    # Set translation WITHOUT adding model body position
+    qpos[:, :3] = trans  # Removed the body_pos addition
+    
+    # Print height after setting
+    print(f"Initial qpos Z: {qpos[0, 2]}")
+    
+    min_height = 0.6  # Minimum height
+    max_height = 1.0  # Maximum height
+    qpos[:, 2] = np.clip(qpos[:, 2], min_height, max_height)
+    
+    # Print final height
+    print(f"Final qpos Z: {qpos[0, 2]}")
+    
+    # Limit horizontal movement speed if there are multiple frames
+    if batch_size > 1:
+        max_delta = 0.1  # Maximum position change per frame
+        for i in range(1, batch_size):
+            delta = qpos[i, :2] - qpos[i-1, :2]  # XY plane movement
+            if np.linalg.norm(delta) > max_delta:
+                delta = delta * (max_delta / np.linalg.norm(delta))
+                qpos[i, :2] = qpos[i-1, :2] + delta
+    
+    # Set root orientation
+    root_rot = sRot.from_rotvec(pose[:, 0, :])
+    initial_rotation = sRot.from_euler('xyz', [0.0, 0, 0])
+    root_matrix = root_rot.as_matrix()
+    root_matrix = np.matmul(initial_rotation.as_matrix(), root_matrix)
+    root_rot = sRot.from_matrix(root_matrix)
+    root_quat = root_rot.as_quat()
+    qpos[:, 3:7] = root_quat[:, [3, 0, 1, 2]]
+    
+    # Set joint angles with slightly tighter limits
+    for ind1, bone_name in enumerate(smpl_bones_to_use[1:], 1):
+        ind2 = body_qposaddr[bone_name]
+        joint_rot = sRot.from_rotvec(pose[:, ind1, :])
+        euler_angles = joint_rot.as_euler("XYZ")
+        euler_angles = np.clip(euler_angles, -2.5, 2.5)
+        qpos[:, ind2[0]:ind2[1]] = euler_angles
+    
+    return qpos
 
 def smplh_to_smpl(pose):
     batch_size = pose.shape[0]

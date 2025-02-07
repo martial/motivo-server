@@ -135,6 +135,7 @@
   function testCustomPose() {
     try {
       parsedPose = parsePoseInput(poseInput);
+      mixPoseAndReward();
       poseError = ""; // Clear any previous errors
     } catch (error) {
       poseError = error.message;
@@ -151,10 +152,10 @@
       poseError = ""; // Clear any previous errors
       
       socket.send(JSON.stringify({
-        type: "mix_pose_reward",
+        type: "load_pose",
         pose: pose,
-        reward: currentReward,
-        mix_weight: mixWeight
+       //reward: currentReward,
+        //mix_weight: mixWeight
       }));
     } catch (error) {
       poseError = error.message;

@@ -10,23 +10,22 @@ class WebSocketManager:
 
     async def broadcast(self, message: Dict[Any, Any]) -> None:
         """Broadcast a message to all connected clients"""
-        if not isinstance(message, str):
-            try:
+        try:
+            if not isinstance(message, str):
                 message = json.dumps(message)
-            except Exception as e:
-                print(f"Error serializing message: {str(e)}")
-                return
+        except Exception:
+            return
 
         if not self.connected_clients:
             return
 
-        # Just try to send to each client, no fancy checks
-        for websocket in self.connected_clients.copy():
+        # Use a list to avoid "set changed size during iteration" errors
+        for websocket in list(self.connected_clients):
             try:
                 await websocket.send(message)
-            except Exception as e:
-                print(f"Error sending to client: {str(e)}")
+            except:  # Catch any possible error
                 self.connected_clients.discard(websocket)
+                continue
 
     def get_stats(self) -> Dict[str, int]:
         """Get current connection statistics"""

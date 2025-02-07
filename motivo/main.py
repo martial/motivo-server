@@ -481,13 +481,13 @@ async def handle_websocket(websocket):
                             pose=smpl_pose,
                             mj_model=env.unwrapped.model,
                             trans=smpl_trans,
-                            normalize=normalize,
-                            random_root=random_root,
-                            count_offset=count_offset,
-                            use_quat=use_quat,
-                            euler_order=euler_order,
-                            model=model_type,
-                            target_rotation=target_rotation  # Add new parameter
+                            #normalize=normalize,
+                            #random_root=random_root,
+                            #count_offset=count_offset,
+                            #use_quat=use_quat,
+                            #euler_order=euler_order,
+                            smpl_model=model_type,
+                            #target_rotation=target_rotation  # Add new parameter
                         )
                         
                         print("Setting physics with converted qpos...")
@@ -575,14 +575,20 @@ async def run_simulation():
         # Broadcast pose data using WebSocketManager
         try:
             qpos = env.unwrapped.data.qpos
-            pose, trans, positions = qpos_to_smpl(qpos, env.unwrapped.model)  # Now capturing positions
+
+
+            #make a temp fake qpos with 
+            
+            pose, trans, positions, position_names = qpos_to_smpl(qpos, env.unwrapped.model)  # Now capturing positions
             
             pose_data = {
                 "type": "smpl_update",
                 "pose": pose.tolist(),
                 "trans": trans.tolist(),
                 "positions": [pos.tolist() for pos in positions],  # Convert numpy arrays to lists
-                "timestamp": datetime.now().isoformat()
+                "qpos": qpos.tolist(),  # Add qpos to the message
+                "timestamp": datetime.now().isoformat(),
+                "position_names": position_names
             }
             
             # Use the WebSocketManager's broadcast method
