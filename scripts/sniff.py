@@ -7,7 +7,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 async def listen_smpl():
     uri = "ws://51.159.163.145:8765"  # Try port 8443
-    #uri = "ws://localhost:8765"
+    uri = "ws://localhost:8765"
     async with websockets.connect(uri) as websocket:
         print("Connected!")
         while True:
@@ -18,6 +18,7 @@ async def listen_smpl():
                     print(f"\nTimestamp: {data.get('timestamp', 'N/A')}")
                     print(f"Pose: {data['pose']}")
                     print(f"Trans: {data['trans']}")
+                    print(f"Positions: {data['positions']}")
             except websockets.exceptions.ConnectionClosed:
                 print("Connection closed")
                 break

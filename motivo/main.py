@@ -188,8 +188,10 @@ async def handle_websocket(websocket):
                             z = model.goal_inference(next_obs=goal_obs)
                         elif inference_type == "tracking":
                             z = model.tracking_inference(next_obs=goal_obs)
-                        else:  # context
-                            z = model.context_inference(goal_obs)
+                        else:
+                            # If unsupported type, default to goal inference
+                            print(f"Warning: Unsupported inference type '{inference_type}', defaulting to goal inference")
+                            z = model.goal_inference(next_obs=goal_obs)
                         
                         # Update current context
                         current_z = z
@@ -453,20 +455,23 @@ async def handle_websocket(websocket):
                         smpl_pose = np.array(data.get("pose", []))
                         smpl_trans = np.array(data.get("trans", [0, 0, 0.91437225]))
                         
-                        # Add new parameters with defaults
-                        normalize = data.get("normalize", False)
+                        # Add target_rotation parameter
+                        target_rotation = data.get("target_rotation", None)  # Get from websocket message
+                        normalize = data.get("normalize", True)
                         random_root = data.get("random_root", False)
                         count_offset = data.get("count_offset", True)
                         use_quat = data.get("use_quat", False)
-                        euler_order = data.get("euler_order", "ZYX")  # Using ZYX as default
-                        model_type = data.get("model", "smpl")  # Can be "smpl" or "smplh"
+                        euler_order = data.get("euler_order", "ZYX")
+                        model_type = data.get("model", "smpl")
                         
                         print(f"Received SMPL pose array length: {len(smpl_pose)}")
                         print(f"Parameters: normalize={normalize}, random_root={random_root}, "
                               f"count_offset={count_offset}, use_quat={use_quat}, "
                               f"euler_order={euler_order}, model={model_type}")
+                        if target_rotation:
+                            print(f"Target rotation: {target_rotation}")
                         
-                        if len(smpl_pose) != 72:  # SMPL poses have 72 values (24 joints × 3)
+                        if len(smpl_pose) != 72:
                             raise ValueError(f"Invalid SMPL pose length: {len(smpl_pose)}, expected 72")
                         
                         # Convert SMPL pose to qpos with additional parameters
@@ -481,7 +486,8 @@ async def handle_websocket(websocket):
                             count_offset=count_offset,
                             use_quat=use_quat,
                             euler_order=euler_order,
-                            model=model_type
+                            model=model_type,
+                            target_rotation=target_rotation  # Add new parameter
                         )
                         
                         print("Setting physics with converted qpos...")
@@ -506,8 +512,10 @@ async def handle_websocket(websocket):
                             z = model.goal_inference(next_obs=goal_obs)
                         elif inference_type == "tracking":
                             z = model.tracking_inference(next_obs=goal_obs)
-                        else:  # context
-                            z = model.context_inference(goal_obs)
+                        else:
+                            # If unsupported type, default to goal inference
+                            print(f"Warning: Unsupported inference type '{inference_type}', defaulting to goal inference")
+                            z = model.goal_inference(next_obs=goal_obs)
                         
                         # Update current context
                         current_z = z
@@ -567,12 +575,13 @@ async def run_simulation():
         # Broadcast pose data using WebSocketManager
         try:
             qpos = env.unwrapped.data.qpos
-            pose, trans = qpos_to_smpl(qpos, env.unwrapped.model)
+            pose, trans, positions = qpos_to_smpl(qpos, env.unwrapped.model)  # Now capturing positions
             
             pose_data = {
                 "type": "smpl_update",
                 "pose": pose.tolist(),
                 "trans": trans.tolist(),
+                "positions": [pos.tolist() for pos in positions],  # Convert numpy arrays to lists
                 "timestamp": datetime.now().isoformat()
             }
             
@@ -581,7 +590,7 @@ async def run_simulation():
             
         except Exception as e:
             print(f"Error broadcasting pose data: {str(e)}")
-            traceback.print_exc()  # Add stack trace for better debugging
+            traceback.print_exc()
         
         # Render and display frame
         frame = env.render()
