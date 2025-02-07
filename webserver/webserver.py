@@ -19,7 +19,7 @@ from flask import Flask, send_from_directory, request, jsonify, send_file
 from flask_cors import CORS
 import json
 from dotenv import load_dotenv
-
+from sqliteHander import VibeDb
 # Load environment variables
 load_dotenv()
 
@@ -38,21 +38,27 @@ try:
     print("Successfully initialized Anthropic client")
 except Exception as e:
     print(f"Error initializing Anthropic client: {str(e)}")
-    
 
-# Add these configurations after app initialization
-UPLOAD_FOLDER = 'uploads'
+# Define storage paths
+STORAGE_BASE = 'storage/video'
+RAW_VIDEO_FOLDER = f'{STORAGE_BASE}/raw'
+TRIMMED_VIDEO_FOLDER = f'{STORAGE_BASE}/trimmed'
+RENDERS_FOLDER = f'{STORAGE_BASE}/renders'
+
+# Create necessary directories
+for folder in [RAW_VIDEO_FOLDER, TRIMMED_VIDEO_FOLDER, RENDERS_FOLDER]:
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+
 ALLOWED_EXTENSIONS = {'mp4', 'webm', 'ogg'}
-
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['RAW_VIDEO_FOLDER'] = RAW_VIDEO_FOLDER
+app.config['TRIMMED_VIDEO_FOLDER'] = TRIMMED_VIDEO_FOLDER
+app.config['RENDERS_FOLDER'] = RENDERS_FOLDER
 
 # Disable Flask's default logging
 import logging
@@ -76,8 +82,6 @@ except Exception as e:
     print(f"Error loading system instructions: {str(e)}")
     raise
 
-
-
 # Add chat history storage
 chat_histories = {}
 
@@ -92,7 +96,6 @@ def serve_static(path):
 @app.route('/amjpeg', methods=['GET'])
 def serve_image():
     try:
-        # Serve the output.png file
         file_path = os.path.join(os.getcwd(), '../output.jpg')
         if os.path.exists(file_path):
             return send_file(file_path, mimetype='image/jpg')
@@ -101,7 +104,7 @@ def serve_image():
     except Exception as e:
         print(f"Error serving image: {str(e)}")
         return jsonify({'error': str(e)}), 500
-    
+
 @app.route('/generate-reward', methods=['POST'])
 def generate_reward():
     print("\n=== New Request ===")
@@ -113,11 +116,9 @@ def generate_reward():
         return jsonify({'error': 'No prompt provided'}), 400
     
     try:
-        # Initialize chat history for new sessions
         if session_id not in chat_histories:
             chat_histories[session_id] = []
         
-        # Debug print
         print(f"Sending prompt: {prompt}")
         print(f"System instructions length: {len(SYSTEM_INSTRUCTIONS)}")
         
@@ -134,16 +135,13 @@ def generate_reward():
             ]
         )
         
-        # Debug print
         print(f"Raw message response: {message}")
         print(f"Message content: {message.content}")
         
         response_content = message.content[0].text if isinstance(message.content, list) else message.content
         
-        # Debug print
         print(f"Final response content: {response_content}")
         
-        # Add the exchange to chat history
         chat_histories[session_id].extend([
             {"role": "user", "content": prompt},
             {"role": "assistant", "content": response_content}
@@ -162,11 +160,9 @@ def generate_reward():
 
 @app.route('/downloads/<path:filename>')
 def download_file(filename):
-    """Serve files from the downloads directory"""
     try:
-        # Look in motivo/downloads directory
         downloads_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../motivo/downloads'))
-        print(f"Looking for file in: {downloads_dir}")  # Debug print
+        print(f"Looking for file in: {downloads_dir}")
         os.makedirs(downloads_dir, exist_ok=True)
         return send_from_directory(downloads_dir, filename)
     except Exception as e:
@@ -175,56 +171,48 @@ def download_file(filename):
 
 @app.route('/upload-video', methods=['POST'])
 def upload_video():
-    # Check if video file exists in request
     if 'video' not in request.files or request.files['video'].filename == '':
         return jsonify({'error': 'No video file provided'}), 400
     
     file = request.files['video']
     
-    # Validate and save file
     if not allowed_file(file.filename):
         return jsonify({'error': 'Invalid file type'}), 400
         
-    # Save file with unique name
     filename = secure_filename(f"{str(uuid.uuid4())}_{file.filename}")
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    filepath = os.path.join(RAW_VIDEO_FOLDER, filename)
     file.save(filepath)
     
-    # Get and validate parameters
     trim_sec = min(max(request.form.get('trim', type=int, default=5), 1), 15)
     start_sec = max(request.form.get('start', type=float, default=0), 0)
     
     try:
-        # Get video duration using ffprobe
         probe = ffmpeg.probe(filepath)
         duration = float(probe['streams'][0]['duration'])
         
-        # Validate if there's enough video length for the requested trim
         if start_sec + trim_sec > duration:
             return jsonify({
-                'error': 'Invalid trim parameters. The requested start time plus trim duration exceeds the video length.',
+                'error': 'Invalid trim parameters',
                 'video_duration': duration,
                 'requested_duration': start_sec + trim_sec
             }), 400
         
-        # Trim video
         trimmed_filename = f"trimmed_{filename}"
-        trimmed_filepath = os.path.join(UPLOAD_FOLDER, trimmed_filename)
+        trimmed_filepath = os.path.join(TRIMMED_VIDEO_FOLDER, trimmed_filename)
         
-        # Trim video using FFmpeg with start time
         ffmpeg.input(filepath).output(
             trimmed_filepath,
-            r=30,          # Frame rate
-            ss=start_sec,  # Start time
-            t=trim_sec,     # Duration
-            vsync='cfr'  # Constant frame rate
+            r=30,
+            ss=start_sec,
+            t=trim_sec,
+            vsync='cfr'
         ).run()
         
-        video_url = f'{VITE_API_URL}/uploads/{trimmed_filename}'
+        video_url = f'{VITE_API_URL}/video/trimmed/{trimmed_filename}'
         
         print(f"Video URL: {video_url}")
         print(f"VITE_VIBE_URL: {VITE_VIBE_URL}")
-        # Make prediction request
+        
         response = requests.post(
             f'{VITE_VIBE_URL}/predictions',
             headers={'accept': 'application/json', 'Content-Type': 'application/json'},
@@ -238,13 +226,52 @@ def upload_video():
         )
 
         print(f"Response: {response}")
-
         response.raise_for_status()
+        response_data = response.json()
+        
+        # Debug print to see response structure
+        print("Response data:", json.dumps(response_data, indent=2))
+        
+        render_url = None
+        if 'output' in response_data and 'video' in response_data['output']:
+            import base64
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            render_filename = f"render_{timestamp}_{filename}"
+            render_filepath = os.path.join(RENDERS_FOLDER, render_filename)
+            
+            # Get base64 data and handle padding
+            b64_data = response_data['output']['video']
+            # Add padding if needed
+            padding = len(b64_data) % 4
+            if padding:
+                b64_data += '=' * (4 - padding)
+                
+            try:
+                # Remove any potential data URL prefix
+                if ',' in b64_data:
+                    b64_data = b64_data.split(',')[1]
+                
+                # Decode and save base64 video
+                video_data = base64.b64decode(b64_data)
+                with open(render_filepath, 'wb') as f:
+                    f.write(video_data)
+                
+                render_url = f'{VITE_API_URL}/video/renders/{render_filename}'
+                response_data['output']['video_url'] = render_url
+                print(f"Successfully saved rendered video to {render_filepath}")
+                
+            except Exception as e:
+                print(f"Error decoding base64 data: {str(e)}")
+                print(f"First 100 chars of b64 data: {b64_data[:100]}")
+        else:
+            print("No video data found in response")
+            print("Available keys in output:", response_data.get('output', {}).keys())
         
         return json.dumps({
             'success': True,
             'video_url': video_url,
-            'prediction': response.json(),
+            'render_url': render_url,
+            'prediction': response_data,
             'video_info': {
                 'original_duration': duration,
                 'trim_start': start_sec,
@@ -253,35 +280,32 @@ def upload_video():
         })
         
     except Exception as e:
-        print(f"FFmpeg error: {str(e)}")
-        return jsonify({"error": "Video processing failed"}), 500
-    except requests.exceptions.RequestException as e:
-        return jsonify({'error': f'Prediction failed: {str(e)}'}), 500
-    except Exception as e:
-        return jsonify({'error': f'Unexpected error: {str(e)}'}), 500
+        print(f"Error: {str(e)}")
+        traceback.print_exc()  # Print full traceback
+        return jsonify({"error": str(e)}), 500
 
-@app.route('/uploads/<path:filename>')
-def serve_video(filename):
+@app.route('/video/<string:video_type>/<path:filename>')
+def serve_video(video_type, filename):
     try:
-        # Get absolute path of the uploads folder
-        uploads_path = os.path.abspath(app.config['UPLOAD_FOLDER'])
-        print(f"Absolute uploads path: {uploads_path}")
-        
-        # Clean the filename to prevent directory traversal
+        if video_type == 'raw':
+            folder = RAW_VIDEO_FOLDER
+        elif video_type == 'trimmed':
+            folder = TRIMMED_VIDEO_FOLDER
+        elif video_type == 'renders':
+            folder = RENDERS_FOLDER
+        else:
+            return jsonify({'error': 'Invalid video type'}), 400
+            
+        folder_path = os.path.abspath(folder)
         filename = filename.rstrip('/')
+        file_path = os.path.join(folder_path, filename)
         
-        # Create absolute path to the file
-        file_path = os.path.join(uploads_path, filename)
-        print(f"Absolute file path: {file_path}")
-        
-        # Verify file exists and is within uploads directory
         if not os.path.exists(file_path):
             return jsonify({'error': 'File not found'}), 404
             
-        if not os.path.commonprefix([uploads_path, os.path.abspath(file_path)]) == uploads_path:
+        if not os.path.commonprefix([folder_path, os.path.abspath(file_path)]) == folder_path:
             return jsonify({'error': 'Invalid path'}), 403
             
-        # Try serving the file directly using send_file instead
         return send_file(file_path)
         
     except Exception as e:
@@ -299,14 +323,22 @@ def clear_chat():
         print(f"Error clearing chat: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-
 #### DATABASE STUFF ####
+
+@app.route('/api/vibeconf', methods=['GET'])
+def get_vibes():
+    try:
+        db = VibeDb()
+        vibes = db.get_all()
+        return jsonify(vibes)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/vibeconf', methods=['POST'])
 def create_vibe():
    try:
        data = request.json
-       db = VibeTable()
+       db = VibeDb()
        vibe_id = db.add(
            title=data['title'],
            thumbnail=data['thumbnail'],
@@ -320,9 +352,10 @@ def create_vibe():
 
 @app.route('/api/vibeconf/<int:vibe_id>', methods=['PUT'])
 def update_vibe(vibe_id):
+   print(f"Updating vibe with ID: {vibe_id}")
    try:
        data = request.json
-       db = VibeTable()
+       db = VibeDb()
        db.update(
            id=vibe_id,
            title=data.get('title'),
@@ -335,15 +368,14 @@ def update_vibe(vibe_id):
    except Exception as e:
        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/vibeconf/<int:vibe_id>', methods=['DELETE'])
+@app.route('/api/vibeconf/delete/<int:vibe_id>', methods=['GET'])
 def delete_vibe(vibe_id):
    try:
-       db = VibeTable()
+       db = VibeDb()
        db.delete(vibe_id)
        return jsonify({'success': True})
    except Exception as e:
        return jsonify({'error': str(e)}), 500
-
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5002, debug=True)

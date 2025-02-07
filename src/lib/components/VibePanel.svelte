@@ -1,6 +1,7 @@
 <script>
   import { onMount, onDestroy } from "svelte";
   import VideoEditor from "./VideoEditor.svelte";
+    import VibeSavedPoses from "./VibeSavedPoses.svelte";
 
   let videoUrl = "";
   let fileInput;
@@ -10,6 +11,7 @@
   let videoElement;
   let selectedFile = null;
   let uploadedVideoUrl = "";
+  let renderedVideoUrl = "";
   let outputVideoBase64 = "";
   let poseData = null;
   let trimSeconds = 5;
@@ -142,6 +144,7 @@
         console.log("Upload successful. Video URL:", uploadedVideoUrl);
         console.log("Video metadata:", result);
         console.log("Prediction output:", result.prediction?.output);
+        renderedVideoUrl = result.prediction?.output.video_url
       } else {
         throw new Error(result.error || "Upload failed");
       }
@@ -320,6 +323,7 @@
             <VideoEditor
               pose={poseData}
               videoBase64={outputVideoBase64}
+              videoFilename={renderedVideoUrl.split('/').pop()}
               bind:frame={selectedFrame}
             />
           </div>
@@ -343,5 +347,7 @@
         {/if}
       </div>
     </div>
+    <!-- Saved Poses Component -->
+    <VibeSavedPoses />
   </div>
 </div>
