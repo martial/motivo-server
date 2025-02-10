@@ -12,13 +12,13 @@ async function loadVersionInfo() {
   try {
     const response = await fetch(`${import.meta.env.VITE_API_URL}/api/version`);
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      console.error("Failed to load version info:", response);
     }
     const data = await response.json();
 
     // Validate the data
     if (!data.version || !data.commitHash || !data.lastCommitDate) {
-      throw new Error("Invalid version data received");
+      console.error("Invalid version info:", data);
     }
 
     versionInfo.set(data);
@@ -38,6 +38,6 @@ async function loadVersionInfo() {
 loadVersionInfo();
 
 // Refresh every 5 minutes in dev
-if (import.meta.env.DEV) {
+if (import.meta.env.DEV ) {
   setInterval(loadVersionInfo, 5 * 60 * 1000);
 }

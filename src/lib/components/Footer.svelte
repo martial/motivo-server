@@ -59,7 +59,7 @@
     {#if isDev}
       <div class="flex items-center">
         <div class="text-xs bg-yellow-100 px-2 py-0.5 rounded-md">
-          🔧 Dev Build: {$versionInfo.version} ({$versionInfo.commitHash.substring(0, 7)})
+          🔧 Dev Build: {$versionInfo?.version} ({$versionInfo?.commitHash.substring(0, 7)})
         </div>
       </div>
     {/if}

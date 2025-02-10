@@ -19,7 +19,8 @@ from flask import Flask, send_from_directory, request, jsonify, send_file
 from flask_cors import CORS
 import json
 from dotenv import load_dotenv
-from sqliteHander import VibeDb
+from sqliteHander import Content
+
 # Load environment variables
 load_dotenv()
 
@@ -68,7 +69,7 @@ log.setLevel(logging.ERROR)
 CORS(app, resources={
     r"/*": {
         "origins": ["*"],
-        "methods": ["GET", "POST"],
+        "methods": ["GET", "POST", "DELETE", "PUT"],
         "allow_headers": ["Content-Type"]
     }
 })
@@ -323,59 +324,59 @@ def clear_chat():
         print(f"Error clearing chat: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-#### DATABASE STUFF ####
+@app.route('/api/version', methods=['GET'])
+def get_version():
+    return jsonify({'version': '1.0.0'})
 
-@app.route('/api/vibeconf', methods=['GET'])
-def get_vibes():
+#### DATABASE STUFF ####
+@app.route('/api/conf', methods=['GET'])
+def get_configs():
     try:
-        db = VibeDb()
-        vibes = db.get_all()
-        return jsonify(vibes)
+        db = Content()
+        configs = db.get_all()
+        return jsonify(configs)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/vibeconf', methods=['POST'])
-def create_vibe():
-   try:
-       data = request.json
-       db = VibeDb()
-       vibe_id = db.add(
-           title=data['title'],
-           thumbnail=data['thumbnail'],
-           video=data['video'],
-           frame=data['frame'],
-           pose=data['pose']
-       )
-       return jsonify({'id': vibe_id}), 201
-   except Exception as e:
-       return jsonify({'error': str(e)}), 500
+@app.route('/api/conf', methods=['POST'])
+def create_config():
+    try:
+        data = request.json
+        db = Content()
+        config_id = db.add(
+            title=data['title'],
+            thumbnail=data['thumbnail'],
+            type=data['type'],  # vibe/reward/llm
+            data=data['data']   # json object
+        )
+        return jsonify({'id': config_id}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/vibeconf/<int:vibe_id>', methods=['PUT'])
-def update_vibe(vibe_id):
-   print(f"Updating vibe with ID: {vibe_id}")
-   try:
-       data = request.json
-       db = VibeDb()
-       db.update(
-           id=vibe_id,
-           title=data.get('title'),
-           thumbnail=data.get('thumbnail'),
-           video=data.get('video'),
-           frame=data.get('frame'),
-           pose=data.get('pose')
-       )
-       return jsonify({'success': True})
-   except Exception as e:
-       return jsonify({'error': str(e)}), 500
+@app.route('/api/conf/<int:config_id>', methods=['PUT'])
+def update_config(config_id):
+    try:
+        data = request.json
+        db = Content()
+        db.update(
+            id=config_id,
+            title=data.get('title'),
+            thumbnail=data.get('thumbnail'),
+            type=data.get('type'),
+            data=data.get('data')
+        )
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/vibeconf/delete/<int:vibe_id>', methods=['GET'])
-def delete_vibe(vibe_id):
-   try:
-       db = VibeDb()
-       db.delete(vibe_id)
-       return jsonify({'success': True})
-   except Exception as e:
-       return jsonify({'error': str(e)}), 500
+@app.route('/api/conf/<int:config_id>', methods=['DELETE'])
+def delete_config(config_id):
+    try:
+        db = Content()
+        db.deleteItem(config_id)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5002, debug=True)
