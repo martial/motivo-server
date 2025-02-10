@@ -1,7 +1,8 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
+    import { websocketService } from '../services/websocketService';
+    import { wsSendPose } from '../services/poses';
   const apiUrl = import.meta.env.VITE_API_URL;
-
   let savedPoses = [];
   let interval;
 
@@ -85,7 +86,7 @@
           <div class="flex justify-end gap-2 mt-2">
             <button
               class="px-3 py-1 text-sm text-blue-600 hover:text-blue-800"
-              on:click={() => {/* Add load pose functionality */}}
+              on:click={() => {wsSendPose(pose.frame, pose.pose)}}
             >
               Load
             </button>
