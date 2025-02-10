@@ -101,6 +101,9 @@
     onMount(() => {
         websocketService.connect();
     });
+    onDestroy(() => {
+        websocketService.disconnect();
+    });
   </script>
   
   <section class="p-4">
