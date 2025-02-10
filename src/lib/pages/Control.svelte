@@ -13,6 +13,7 @@
     import { favoriteStore } from '../stores/favoriteStore';
     import LLM from '../components/LLM.svelte';
     import { chatStore } from '../stores/chatStore';
+    import PresetsList from '../components/PresetsList.svelte';
     
     let isSocketReady = $state(false);
     let cleanupListener;
@@ -159,7 +160,10 @@
         </div>
     </div>
 </div>
-
+<!-- Add PresetsList at the bottom -->
+<div class="w-full">
+    <PresetsList />
+    </div>
 <style>
     /* Custom grid layout for auto-fitting columns */
     .grid-auto-fit {
