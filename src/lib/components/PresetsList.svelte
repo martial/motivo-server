@@ -1,15 +1,18 @@
-<!-- PresetsList.svelte -->
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { fade } from 'svelte/transition';
   import { DbService } from '../services/db';
   import { websocketService } from '../services/websocketService';
+  import { parameterStore } from '../stores/parameterStore';
 
   let presets = [];
   let selectedType = 'all';
   let isLoading = true;
+  let isSaving = false;
   let thumbnail = null;
   let videoBuffer;
+  let saveError = '';
+  let loadError = '';
   
   const apiUrl = import.meta.env.VITE_API_URL;
 
@@ -70,24 +73,79 @@
     }
   }
 
-  onMount(async () => {
+  async function loadPresets() {
     try {
       presets = await DbService.getAllConfigs();
+      loadError = '';
+    } catch (error) {
+      console.error('Failed to load presets:', error);
+      loadError = 'Failed to load presets. Please try again.';
+    }
+  }
+
+  async function loadPresetConfig(preset) {
+    try {
+      if (preset.data?.environmentParams) {
+        // Update parameter store with saved environment parameters
+        Object.entries(preset.data.environmentParams).forEach(([key, value]) => {
+          parameterStore.updateParameter(key, value);
+        });
+
+        // Send environment parameters to backend
+        await websocketService.send({
+          type: "update_environment",
+          params: preset.data.environmentParams
+        });
+      }
+
+      if (preset.type === 'rewards' && preset.data?.rewards) {
+        // Send request_reward message
+        await websocketService.send({
+          type: "request_reward",
+          reward: {
+            rewards: preset.data.rewards,
+            weights: preset.data.weights,
+            combinationType: preset.data.combinationType
+          },
+          timestamp: new Date().toISOString()
+        });
+
+        // Request updated state after loading rewards
+        await websocketService.send({
+          type: "debug_model_info"
+        });
+      }
       
-      // Initialize video buffer
+      loadError = '';
+    } catch (error) {
+      console.error('Failed to load preset configuration:', error);
+      loadError = 'Failed to load preset. Please try again.';
+    }
+  }
+
+  onMount(async () => {
+    try {
+      await loadPresets();
+      
       videoBuffer = new VideoBuffer();
       await videoBuffer.initializeBuffer();
       
-      // Update frames
       setInterval(() => {
         const currentUrl = `${apiUrl}/amjpeg?${Date.now()}`;
         videoBuffer.updateFrame(currentUrl);
       }, 33);
       
     } catch (error) {
-      console.error('Failed to load presets:', error);
+      console.error('Failed during initialization:', error);
+      loadError = 'Failed to initialize. Please refresh the page.';
     } finally {
       isLoading = false;
+    }
+  });
+
+  onDestroy(() => {
+    if (videoBuffer?.stream) {
+      videoBuffer.stream.getTracks().forEach(track => track.stop());
     }
   });
 
@@ -97,87 +155,103 @@
   }
 
   async function deletePreset(id) {
-      try {
-        await DbService.deleteConfig(id);
-        presets = presets.filter(preset => preset.id !== id);
-      } catch (error) {
-        console.error('Failed to delete preset:', error);
-      }
+    try {
+      await DbService.deleteConfig(id);
+      await loadPresets();
+      saveError = '';
+    } catch (error) {
+      console.error('Failed to delete preset:', error);
+      saveError = 'Failed to delete preset. Please try again.';
+    }
   }
 
   async function saveCurrentConfig() {
     const title = prompt('Enter a name for this configuration:');
     if (!title) return;
 
+    isSaving = true;
+    saveError = '';
+    
     try {
-      // Start recording thumbnail
       videoBuffer.startRecording();
       const videoBlob = await videoBuffer.getBuffer();
       
-      // Convert blob to base64
       const base64Thumbnail = await new Promise((resolve) => {
         const reader = new FileReader();
         reader.onloadend = () => {
-          // Remove the data URL prefix to get just the base64 string
           const base64String = reader.result.split(',')[1];
           resolve(base64String);
         };
         reader.readAsDataURL(videoBlob);
       });
 
-      // Create a Promise to handle the single response
-      const configPromise = new Promise((resolve, reject) => {
-        const cleanup = websocketService.addMessageHandler((data) => {
-          if (data.type === 'debug_model_info') {
-            cleanup();
-            resolve(data);
-          }
+      let rewardsData = null;
+
+      try {
+        // Request current model info
+        websocketService.send({
+          type: "debug_model_info"
         });
 
-        setTimeout(() => {
-          cleanup();
-          reject(new Error('Timeout waiting for model info'));
-        }, 5000);
-      });
+        const modelInfo = await new Promise((resolve, reject) => {
+          const cleanup = websocketService.addMessageHandler((data) => {
+            if (data.type === 'debug_model_info') {
+              cleanup();
+              resolve(data);
+            }
+          });
 
-      websocketService.getSocket()?.send(JSON.stringify({
-        type: "debug_model_info"
-      }));
+          setTimeout(() => {
+            cleanup();
+            reject(new Error('Timeout waiting for model info'));
+          }, 5000);
+        });
 
-      const modelInfo = await configPromise;
+        if (modelInfo?.active_rewards) {
+          rewardsData = {
+            rewards: modelInfo.active_rewards.rewards,
+            weights: modelInfo.active_rewards.weights,
+            combinationType: modelInfo.active_rewards.combinationType,
+          };
+        }
+      } catch (error) {
+        console.log('No rewards data available:', error);
+      }
+
+      // Get current environment parameters from store
+      const environmentParams = {
+        gravity: $parameterStore.gravity,
+        density: $parameterStore.density,
+        wind_x: $parameterStore.wind_x,
+        wind_y: $parameterStore.wind_y,
+        wind_z: $parameterStore.wind_z,
+        viscosity: $parameterStore.viscosity,
+        timestep: $parameterStore.timestep
+      };
       
       const config = {
         title,
-        type: 'rewards',
-        thumbnail: base64Thumbnail, // Add thumbnail to config
+        type: rewardsData ? 'rewards' : 'environment',
+        thumbnail: base64Thumbnail,
         data: {
-          rewards: modelInfo.active_rewards.rewards,
-          weights: modelInfo.active_rewards.weights,
-          combinationType: modelInfo.active_rewards.combinationType
+          ...(rewardsData && { ...rewardsData }),
+          environmentParams
         }
       };
       
-      console.log('Saving configuration:', config);
-      const newPreset = await DbService.addConfig(config);
-      presets = [...presets, newPreset];
+      await DbService.addConfig(config);
+      await loadPresets();
 
     } catch (error) {
       console.error('Failed to save configuration:', error);
+      saveError = 'Failed to save configuration. Please try again.';
+    } finally {
+      isSaving = false;
     }
-  }
-
-  async function saveThumbnail() {
-    videoBuffer.startRecording();
-    const videoBlob = await videoBuffer.getBuffer();
-    thumbnail = URL.createObjectURL(videoBlob);
-  }
-
-  async function createThumbnail() {
-    await saveThumbnail();
   }
 </script>
 
-<div class="w-full bg-white rounded-lg shadow-lg p-4">
+<div class="w-full bg-white rounded-lg shadow-lg p-4 mb-8">
   <div class="flex justify-between items-center mb-4">
     <h2 class="text-lg font-bold text-gray-800">Presets</h2>
     <div class="flex gap-4">
@@ -186,37 +260,34 @@
         class="border rounded-md px-2 py-1 text-sm"
       >
         <option value="all">All Types</option>
-        <option value="llm">LLM</option>
+        <option value="environment">Environment</option>
         <option value="rewards">Rewards</option>
       </select>
       <button 
-        class="bg-green-500 text-white px-3 py-1 text-sm font-medium rounded-md hover:bg-green-600 transition-colors"
+        class="bg-green-500 text-white px-3 py-1 text-sm font-medium rounded-md hover:bg-green-600 transition-colors disabled:bg-gray-400"
         on:click={saveCurrentConfig}
+        disabled={isSaving}
       >
-        Save Current
-      </button>
-      <button 
-        class="bg-blue-500 text-white px-3 py-1 text-sm font-medium rounded-md hover:bg-blue-600 transition-colors"
-        on:click={createThumbnail}
-      >
-        Create Thumbnail
+        {isSaving ? 'Saving...' : 'Save Current'}
       </button>
     </div>
   </div>
+
+  {#if saveError}
+    <div class="text-red-500 mb-4 text-sm">{saveError}</div>
+  {/if}
+
+  {#if loadError}
+    <div class="text-red-500 mb-4 text-sm">{loadError}</div>
+  {/if}
 
   {#if isLoading}
     <p class="text-gray-500">Loading presets...</p>
   {:else}
     <div class="flex gap-4 overflow-x-auto pb-4">
-      {#if thumbnail}
-        <div class="flex-shrink-0 w-64 border rounded-lg p-4 bg-white shadow-sm">
-          <video src={thumbnail} controls width="320" height="240"></video>
-        </div>
-      {/if}
-      
       {#each filterPresets(presets) as preset (preset.id)}
         <div 
-          class="flex-shrink-0 w-64 border rounded-lg p-4 bg-white shadow-sm"
+          class="flex-shrink-0 w-52 border rounded-lg p-4 bg-white shadow-sm"
           transition:fade
         >
           {#if preset.thumbnail}
@@ -238,14 +309,23 @@
           </div>
           
           <div class="text-sm text-gray-600 mb-4">
-            {#if preset.type === 'rewards'}
-              {preset.data.rewards.length} rewards
-            {:else}
-              LLM Configuration
+            {#if preset.data?.environmentParams}
+              G: {preset.data.environmentParams.gravity}
+              D: {preset.data.environmentParams.density}
+              {#if preset.type === 'rewards' && preset.data?.rewards}
+                <br>
+                {preset.data.rewards.length} rewards
+              {/if}
             {/if}
           </div>
 
           <div class="flex justify-end gap-2">
+            <button 
+              class="text-sm text-blue-600 hover:text-blue-800"
+              on:click={() => loadPresetConfig(preset)}
+            >
+              Load
+            </button>
             <button 
               class="text-sm text-red-600 hover:text-red-800"
               on:click={() => deletePreset(preset.id)}
