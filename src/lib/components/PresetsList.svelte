@@ -4,6 +4,7 @@
   import { DbService } from '../services/db';
   import { websocketService } from '../services/websocketService';
   import { parameterStore } from '../stores/parameterStore';
+  import PresetTimeline from './PresetTimeline.svelte';
 
   let presets = [];
   let selectedType = 'all';
@@ -252,6 +253,10 @@
 </script>
 
 <div class="w-full bg-white rounded-lg shadow-lg p-4 mb-8">
+  <div class="w-full">
+    <h2 class="text-lg font-bold text-gray-800">Timeline</h2>
+    <PresetTimeline />
+  </div>
   <div class="flex justify-between items-center mb-4">
     <h2 class="text-lg font-bold text-gray-800">Presets</h2>
     <div class="flex gap-4">
@@ -287,15 +292,20 @@
     <div class="flex gap-4 overflow-x-auto pb-4">
       {#each filterPresets(presets) as preset (preset.id)}
         <div 
-          class="flex-shrink-0 w-52 border rounded-lg p-4 bg-white shadow-sm"
+          draggable="true"
+          on:dragstart={(e) => {
+            e.dataTransfer.setData('preset', JSON.stringify(preset));
+          }}
+          class="flex-shrink-0 w-52 border rounded-lg p-4 bg-white shadow-sm cursor-move"
           transition:fade
         >
           {#if preset.thumbnail}
             <video 
               src={`data:video/webm;base64,${preset.thumbnail}`}
-              controls
               autoplay
+              muted
               loop
+              playsinline
               class="w-full mb-2 rounded"
               height="120"
             ></video>
