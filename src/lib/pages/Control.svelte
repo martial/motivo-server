@@ -163,7 +163,7 @@
 <!-- Add PresetsList at the bottom -->
 <div class="w-full">
     <PresetsList />
-    </div>
+</div>
 <style>
     /* Custom grid layout for auto-fitting columns */
     .grid-auto-fit {
