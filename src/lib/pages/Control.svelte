@@ -31,13 +31,23 @@
     });
 
     let isTestingAll = $state(false);
+    let testingStatus = $state('');
+    let currentStep = $state(0);
+    let totalSteps = $state(0);
     
     function handleTestAll() {
         if (isTestingAll) {
             rewardStore.stopTesting();
             isTestingAll = false;
+            testingStatus = '';
+            currentStep = 0;
+            totalSteps = 0;
         } else {
-            rewardStore.startTestingAllOptions();
+            rewardStore.startTestingAllOptions((status, step, total) => {
+                testingStatus = status;
+                currentStep = step;
+                totalSteps = total;
+            });
             isTestingAll = true;
         }
     }
@@ -63,6 +73,24 @@
             <LiveFeed />
             <ParameterPanel class="flex-1 min-w-[400px]" />
             
+            {#if isTestingAll}
+                <div class="bg-white/50 p-4 rounded-lg space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="font-medium">Testing Progress</span>
+                        <span class="text-sm">{currentStep}/{totalSteps}</span>
+                    </div>
+                    {#if testingStatus}
+                        <p class="text-sm text-gray-600">{testingStatus}</p>
+                    {/if}
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                            class="bg-blue-500 h-2 rounded-full transition-all duration-300" 
+                            style="width: {(currentStep / totalSteps * 100) || 0}%"
+                        ></div>
+                    </div>
+                </div>
+            {/if}
+
             <!-- Add Test All button -->
             <button 
                 class="w-full px-4 py-2 rounded-lg font-medium transition-colors {isTestingAll ? 'bg-red-500 text-white' : 'bg-blue-500 text-white'}"

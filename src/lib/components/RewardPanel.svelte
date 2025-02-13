@@ -88,7 +88,7 @@
     const updatedRewards = {
       rewards: activeRewards?.rewards ? [...activeRewards.rewards, newReward] : [newReward],
       weights: activeRewards?.weights ? [...activeRewards.weights, 1.0] : [1.0],
-      combinationType: activeRewards?.combinationType || 'multiplicative'
+      combinationType: activeRewards?.combinationType || 'geometric'
     };
 
     // Send combined rewards through websocket

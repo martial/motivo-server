@@ -233,14 +233,15 @@ export const COMBINATION_TYPES = [
   "geometric",
 ];
 
+let testingInterval = null;
+let currentHandler = null;
+
 function createRewardStore() {
   const { subscribe, set, update } = writable({
     activeRewards: [],
     weights: [],
-    combinationType: "multiplicative",
+    combinationType: "geometric",
   });
-
-  let testingInterval = null;
 
   return {
     subscribe,
@@ -340,14 +341,14 @@ function createRewardStore() {
       set({
         activeRewards: [],
         weights: [],
-        combinationType: "multiplicative",
+        combinationType: "geometric",
       });
     },
     cleanRewards: () => {
       set({
         activeRewards: [],
         weights: [],
-        combinationType: "multiplicative",
+        combinationType: "geometric",
       });
 
       const ws = websocketService.getSocket();
@@ -359,68 +360,182 @@ function createRewardStore() {
         );
       }
     },
-    startTestingAllOptions: () => {
+    startTestingAllOptions: (statusCallback) => {
       if (testingInterval) return; // Already testing
 
       const rewardTypes = Object.entries(REWARD_TYPES);
       let currentIndex = 0;
+      let isWaitingForCompletion = false;
+      let currentRewardId = null;
+      let computationTimeout = null;
+      let hasReceivedResponse = false;
 
-      console.log(`Starting to test all rewards (${rewardTypes.length} total)`);
-      // Clean existing rewards before starting
-      rewardStore.cleanRewards();
+      const COMPUTATION_TIMEOUT = 10 * 60 * 1000; // 10 minutes for computation
+      const NEXT_TEST_DELAY = 5000; // 5 seconds between tests
+
+      console.log(
+        `🔄 Starting sequential testing of all rewards (${rewardTypes.length} total)`
+      );
+
+      if (statusCallback) {
+        statusCallback("Starting tests...", 0, rewardTypes.length);
+      }
+
+      // Define helper functions first
+      const cleanup = () => {
+        const ws = websocketService.getSocket();
+        if (currentHandler && ws) {
+          ws.removeEventListener("message", currentHandler);
+          currentHandler = null;
+        }
+        if (computationTimeout) {
+          clearTimeout(computationTimeout);
+          computationTimeout = null;
+        }
+      };
+
+      const moveToNext = () => {
+        isWaitingForCompletion = false;
+        currentIndex++;
+
+        // Clean up before moving to next test
+        cleanup();
+
+        if (statusCallback) {
+          statusCallback(
+            "Waiting before next test...",
+            currentIndex,
+            rewardTypes.length
+          );
+        }
+
+        console.log(
+          `\n⏳ Waiting ${NEXT_TEST_DELAY / 1000} seconds before next test...`
+        );
+        setTimeout(() => {
+          rewardStore.cleanRewards();
+          testNext();
+        }, NEXT_TEST_DELAY);
+      };
 
       const testNext = () => {
         const ws = websocketService.getSocket();
         if (!ws || ws.readyState !== WebSocket.OPEN) {
           console.log("❌ WebSocket not connected, stopping tests");
-          clearInterval(testingInterval);
-          testingInterval = null;
+          if (statusCallback) {
+            statusCallback(
+              "WebSocket disconnected",
+              currentIndex,
+              rewardTypes.length
+            );
+          }
+          cleanup();
           return;
         }
 
         if (currentIndex >= rewardTypes.length) {
           console.log("✅ Finished testing all rewards");
-          clearInterval(testingInterval);
-          testingInterval = null;
-          rewardStore.cleanRewards();
+          if (statusCallback) {
+            statusCallback(
+              "Testing complete!",
+              rewardTypes.length,
+              rewardTypes.length
+            );
+          }
+          cleanup();
           return;
         }
 
         const [type, config] = rewardTypes[currentIndex];
+        console.log(
+          `\n📋 Step ${currentIndex + 1}/${
+            rewardTypes.length
+          }: Testing "${type}"`
+        );
+
+        // Create default parameters for this reward type
+        currentRewardId = uuidv4();
         const defaultParams = Object.fromEntries(
           Object.entries(config).map(([key, value]) => [key, value.default])
         );
 
-        console.log(
-          `Testing reward ${currentIndex + 1}/${rewardTypes.length}: "${type}"`
-        );
-        console.log("Parameters:", defaultParams);
-
-        // Create default parameters for this reward type
         const params = {
-          id: uuidv4(),
+          id: currentRewardId,
           type: type,
           name: type,
           parameters: defaultParams,
         };
 
+        console.log("⚙️ Parameters:", defaultParams);
+
+        // Remove previous handler if exists
+        cleanup();
+
         // Set up completion listener for this test
-        const completionHandler = (event) => {
-          const data = JSON.parse(event.data);
-          if (
-            data.type === "reward_computation" &&
-            data.status === "completed"
-          ) {
-            ws.removeEventListener("message", completionHandler);
-            currentIndex++;
-            setTimeout(testNext, 2000); // Wait 2 seconds after completion before next test
+        currentHandler = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            // Only log non-SMPL update messages
+            if (data.type !== "smpl_update") {
+              console.log("📩 Received:", data.type, data);
+            }
+
+            if (data.type === "reward") {
+              // Got initial reward response
+              console.log(
+                `✅ Reward "${type}" request acknowledged, moving to next test in 5 seconds...`
+              );
+
+              if (statusCallback) {
+                statusCallback(
+                  `Testing "${type}" reward...`,
+                  currentIndex + 1,
+                  rewardTypes.length
+                );
+              }
+
+              // Move to next test after 5 seconds
+              setTimeout(() => {
+                moveToNext();
+              }, 5000);
+            }
+          } catch (error) {
+            console.error("❌ Error handling message:", error);
+            if (statusCallback) {
+              statusCallback(
+                `Error: ${error.message}`,
+                currentIndex,
+                rewardTypes.length
+              );
+            }
           }
         };
-        ws.addEventListener("message", completionHandler);
 
-        // Clean previous and add new reward
-        rewardStore.cleanRewardsLocal();
-        rewardStore.addReward(type, params);
+        // Add handler and start test
+        ws.addEventListener("message", currentHandler);
+
+        console.log("🧹 Cleaning previous rewards...");
+        if (statusCallback) {
+          statusCallback(
+            "Cleaning previous rewards...",
+            currentIndex,
+            rewardTypes.length
+          );
+        }
+        rewardStore.cleanRewards();
+
+        // Wait a bit longer after cleaning
+        setTimeout(() => {
+          console.log(`📤 Sending reward request for "${type}"...`);
+          if (statusCallback) {
+            statusCallback(
+              `Sending reward request for "${type}"...`,
+              currentIndex,
+              rewardTypes.length
+            );
+          }
+          rewardStore.addReward(type, params);
+        }, 1000); // Increased delay to 1 second
       };
 
       // Start the testing sequence
@@ -428,7 +543,12 @@ function createRewardStore() {
     },
 
     stopTesting: () => {
+      console.log("🛑 Stopping all tests");
       if (testingInterval) {
+        const ws = websocketService.getSocket();
+        if (ws?.readyState === WebSocket.OPEN && currentHandler) {
+          ws.removeEventListener("message", currentHandler);
+        }
         clearInterval(testingInterval);
         testingInterval = null;
         rewardStore.cleanRewards();

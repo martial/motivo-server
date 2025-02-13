@@ -30,8 +30,6 @@ class PositionReward(humenv_rewards.RewardFunction):
     control_weight: float = 0.2
 
     def compute(self, model: mujoco.MjModel, data: mujoco.MjData) -> float:
-       
-
         # Position rewards
         position_rewards = []
         total_weight = sum(target.weight for target in self.targets.values())
@@ -49,6 +47,8 @@ class PositionReward(humenv_rewards.RewardFunction):
                     value_at_margin=0.01,
                     sigmoid="linear"
                 )
+                # Handle both tensor and float return types
+                x_reward = x_reward.item() if hasattr(x_reward, 'item') else float(x_reward)
                 axis_rewards.append(x_reward)
 
             if target.y is not None:
@@ -59,6 +59,8 @@ class PositionReward(humenv_rewards.RewardFunction):
                     value_at_margin=0.01,
                     sigmoid="linear"
                 )
+                # Handle both tensor and float return types
+                y_reward = y_reward.item() if hasattr(y_reward, 'item') else float(y_reward)
                 axis_rewards.append(y_reward)
 
             if target.z is not None:
@@ -69,6 +71,8 @@ class PositionReward(humenv_rewards.RewardFunction):
                     value_at_margin=0.01,
                     sigmoid="linear"
                 )
+                # Handle both tensor and float return types
+                z_reward = z_reward.item() if hasattr(z_reward, 'item') else float(z_reward)
                 axis_rewards.append(z_reward)
 
             if axis_rewards:
@@ -79,13 +83,30 @@ class PositionReward(humenv_rewards.RewardFunction):
 
         # Multiplicative combination of body part rewards
         position_reward = np.prod(position_rewards) if position_rewards else 0.0
+        
+        # Get upright reward
+        upright_reward = get_chest_upright(model, data)
+        upright_reward = upright_reward.item() if hasattr(upright_reward, 'item') else float(upright_reward)
+        
+        # Compute control cost (penalize large actions)
+        ctrl = data.ctrl.copy()
+        control_reward = rewards.tolerance(
+            np.linalg.norm(ctrl),
+            bounds=(0, 1),
+            margin=1,
+            value_at_margin=0,
+            sigmoid="quadratic"
+        )
+        control_reward = control_reward.item() if hasattr(control_reward, 'item') else float(control_reward)
+        
+        # Combine rewards with weights
         final_reward = (
             (1 - self.upright_weight - self.control_weight) * position_reward +
-            self.upright_weight  +
-            self.control_weight 
+            self.upright_weight * upright_reward +
+            self.control_weight * control_reward
         )
         
-        return position_reward
+        return float(final_reward)
 
     @staticmethod
     def reward_from_name(name: str) -> Optional["humenv_rewards.RewardFunction"]:
