@@ -1,5 +1,6 @@
 import { writable } from "svelte/store";
 import { rewardStore } from "./rewardStore";
+import { websocketService } from "../services/websocketService";
 
 function createFavoriteStore() {
   // Initialize from localStorage
@@ -33,12 +34,35 @@ function createFavoriteStore() {
         localStorage.getItem("rewardFavorites") || "{}"
       );
       const favorite = favorites[name];
+      console.log("Loading favorite:", name, favorite); // Debug log
+
       if (favorite) {
-        rewardStore.update({
+        const newState = {
           activeRewards: favorite.activeRewards,
           weights: favorite.activeRewards.map((reward) => reward.weight),
           combinationType: favorite.combinationType,
-        });
+        };
+        console.log("Setting rewardStore to:", newState); // Debug log
+
+        // First update the store
+        rewardStore.set(newState);
+
+        // Then send the configuration to the WebSocket server
+        const ws = websocketService.getSocket();
+        if (ws?.readyState === WebSocket.OPEN) {
+          ws.send(
+            JSON.stringify({
+              type: "request_reward",
+              reward: {
+                rewards: newState.activeRewards,
+                weights: newState.weights,
+                combinationType: newState.combinationType,
+              },
+            })
+          );
+        }
+      } else {
+        console.warn("No favorite found with name:", name); // Debug warning
       }
     },
     serializeConfig(name) {

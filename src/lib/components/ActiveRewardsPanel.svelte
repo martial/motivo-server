@@ -13,15 +13,15 @@
 
   onMount(() => {
     cleanupHandler = websocketService.addMessageHandler((data) => {
-      if (data.type === 'debug_model_info' && data.active_rewards) {
+      if (data.type === 'debug_model_info') {
         activeRewards = data.active_rewards;
       }
     });
 
     // Request initial state
-    websocketService.send({
+    websocketService.getSocket()?.send(JSON.stringify({
       type: "debug_model_info"
-    });
+    }));
   });
 
   onDestroy(() => {
@@ -33,7 +33,26 @@
     if (!pendingChanges[rewardIndex]) {
       pendingChanges[rewardIndex] = {};
     }
-    pendingChanges[rewardIndex][name] = value;
+    
+    // Special handling for weight changes
+    if (name === 'weight') {
+      // Create a copy of the current weights array
+      const newWeights = [...activeRewards.weights];
+      newWeights[rewardIndex] = value;
+      
+      // Send immediate weight update
+      websocketService.getSocket()?.send(JSON.stringify({
+        type: 'request_reward',
+        reward: {
+          ...activeRewards,
+          weights: newWeights
+        },
+        timestamp: new Date().toISOString()
+      }));
+    } else {
+      // Handle other parameter changes as before
+      pendingChanges[rewardIndex][name] = value;
+    }
   }
 
   function updateReward(rewardIndex) {
@@ -97,14 +116,12 @@
               <h3 class="text-xl font-bold text-blue-500 font-display tracking-wide">
                 {reward.name}
               </h3>
-              <div class="flex items-center gap-2 w-1/2">
-                <span class="text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap">
-                  Weight
-                </span>
-                <div class="flex-1 min-w-[120px]">
+              <div class="flex items-center gap-2">
+               
+                <div class="w-24 relative">
                   <ParameterControl
                     name="weight"
-                    label={""}
+                    label={"weight"}
                     type="range"
                     value={activeRewards.weights[rewardIndex] * 100}
                     min={0}
@@ -121,6 +138,7 @@
                     }}
                   />
                 </div>
+               
               </div>
             </div>
 

@@ -4,7 +4,7 @@ import numpy as np
 import json
 import pickle
 from datetime import datetime
-from smpl_utils import qpos_to_smpl, SMPL_BONE_ORDER_NAMES
+from utils.smpl_utils import qpos_to_smpl, SMPL_BONE_ORDER_NAMES
 import zipfile
 
 def save_frame_data(frame, qpos, qvel, env=None, smpl_data=None):

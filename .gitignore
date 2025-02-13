@@ -56,3 +56,6 @@ captured_frames/
 metamotivo-S-1-datasets
 *.png
 *.jpg
+*.zip
+
+storage/
