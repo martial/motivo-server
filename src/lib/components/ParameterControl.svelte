@@ -1,5 +1,6 @@
 <script>
   import { createEventDispatcher } from 'svelte';
+  import { REWARD_TYPES } from '../stores/rewardStore';
   const dispatch = createEventDispatcher();
 
   export let name;
@@ -14,20 +15,21 @@
 
   //console.log("Type is ", type);
 
-  // Define parameter ranges based on type
-  const parameterRanges = {
-    'target_height': { min: 0, max: 2.0, step: 0.1, default: 1.4 },
-    'target_distance': { min: 0, max: 1.0, step: 0.1, default: 0.5 },
-    // Add other parameter types as needed
-  };
-
-  // Set ranges based on parameter name if available
-  $: if (name in parameterRanges) {
-    min = parameterRanges[name].min;
-    max = parameterRanges[name].max;
-    step = parameterRanges[name].step;
-    if (defaultValue === undefined) {
-      defaultValue = parameterRanges[name].default;
+  // Instead, use the parameter definitions from REWARD_TYPES
+  $: if (name && REWARD_TYPES[name]) {
+    const paramConfig = REWARD_TYPES[name][label];
+    if (paramConfig) {
+      type = paramConfig.type;
+      if (type === 'range') {
+        min = paramConfig.min;
+        max = paramConfig.max;
+        step = paramConfig.step;
+      } else if (type === 'select') {
+        options = paramConfig.options.map(opt => ({ value: opt, label: opt }));
+      }
+      if (defaultValue === undefined) {
+        defaultValue = paramConfig.default;
+      }
     }
   }
 

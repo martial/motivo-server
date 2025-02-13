@@ -60,58 +60,81 @@ class WebSocketService {
 
   connect() {
     if (this.socket?.readyState === WebSocket.OPEN) {
-      return; // Already connected
+      console.log("Already connected, skipping connection attempt");
+      return;
     }
 
     if (this.socket?.readyState === WebSocket.CONNECTING) {
-      return; // Already trying to connect
+      console.log("Already connecting, skipping connection attempt");
+      return;
     }
 
-    this.socket = new WebSocket(this.wsUrl);
+    try {
+      console.log(`Attempting to connect to ${this.wsUrl}`);
+      this.socket = new WebSocket(this.wsUrl);
 
-    this.socket.onopen = () => {
-      console.log("WebSocket connected");
-      this.isReady = true;
-      this.reconnectAttempts = 0; // Reset reconnect attempts on successful connection
-      this.notifyReadyStateListeners();
-      this.startStatusCheck(); // Start status check when connected
-    };
+      this.socket.onopen = () => {
+        console.log(`Successfully connected to ${this.wsUrl}`);
+        this.isReady = true;
+        this.reconnectAttempts = 0;
+        this.notifyReadyStateListeners();
+        this.startStatusCheck();
+      };
 
-    this.socket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        this.handleMessage(data);
-      } catch (error) {
-        console.error("Error processing WebSocket message:", error);
-      }
-    };
-
-    this.socket.onclose = (event) => {
-      console.log("WebSocket disconnected", event.code, event.reason);
-      this.isReady = false;
-      this.notifyReadyStateListeners();
-      this.stopStatusCheck(); // Stop status check when disconnected
-
-      // Attempt to reconnect unless explicitly closed
-      if (
-        !event.wasClean &&
-        this.reconnectAttempts < this.maxReconnectAttempts
-      ) {
-        this.reconnectTimeout = setTimeout(() => {
-          this.reconnectAttempts++;
-          console.log(
-            `Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`
+      this.socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          this.handleMessage(data);
+        } catch (error) {
+          console.error(
+            "Error processing WebSocket message:",
+            error,
+            event.data
           );
-          this.connect();
-        }, this.reconnectInterval);
-      }
-    };
+        }
+      };
 
-    this.socket.onerror = (error) => {
-      console.error("WebSocket error:", error);
-      this.isReady = false;
-      this.notifyReadyStateListeners();
-    };
+      this.socket.onclose = (event) => {
+        const reason = event.reason || "No reason provided";
+        console.log(
+          `WebSocket disconnected - Code: ${event.code}, Reason: ${reason}, Clean: ${event.wasClean}`
+        );
+        this.isReady = false;
+        this.notifyReadyStateListeners();
+        this.stopStatusCheck();
+
+        // Only reconnect for specific error codes
+        if (!event.wasClean && event.code !== 1000) {
+          if (this.reconnectAttempts < this.maxReconnectAttempts) {
+            const delay = Math.min(
+              1000 * Math.pow(2, this.reconnectAttempts),
+              10000
+            );
+            console.log(
+              `Scheduling reconnect attempt ${this.reconnectAttempts + 1}/${
+                this.maxReconnectAttempts
+              } in ${delay}ms`
+            );
+            this.reconnectTimeout = setTimeout(() => {
+              this.reconnectAttempts++;
+              this.connect();
+            }, delay);
+          } else {
+            console.log("Max reconnection attempts reached");
+          }
+        }
+      };
+
+      this.socket.onerror = (error) => {
+        console.error("WebSocket error details:", {
+          url: this.wsUrl,
+          readyState: this.socket?.readyState,
+          error: error,
+        });
+      };
+    } catch (error) {
+      console.error("Error creating WebSocket connection:", error);
+    }
   }
 
   handleMessage(data) {
@@ -198,12 +221,33 @@ class WebSocketService {
 
   send(data) {
     if (this.socket?.readyState === WebSocket.OPEN) {
-      this.socket.send(
-        JSON.stringify({
-          ...data,
-          timestamp: new Date().toISOString(),
-        })
-      );
+      // If this is a clean_rewards message, schedule an immediate debug check
+      if (data.type === "clean_rewards") {
+        this.socket.send(
+          JSON.stringify({
+            ...data,
+            timestamp: new Date().toISOString(),
+          })
+        );
+
+        // Trigger immediate debug check
+        setTimeout(() => {
+          this.socket.send(
+            JSON.stringify({
+              type: "debug_model_info",
+              timestamp: new Date().toISOString(),
+            })
+          );
+        }, 100); // Small delay to ensure reset completes first
+      } else {
+        // Normal message sending
+        this.socket.send(
+          JSON.stringify({
+            ...data,
+            timestamp: new Date().toISOString(),
+          })
+        );
+      }
     } else {
       console.warn("WebSocket is not connected. Message not sent:", data);
     }

@@ -3,19 +3,13 @@ version: '3.8'
 services:
   backend:
     image: yassinsiouda/motivo-server-back:latest
-    build: 
-      context: .
-      dockerfile: Dockerfile.back
     ports:
       - "5002:5002"
       - "8765:8765"
     env_file:
       - .env
     volumes:
-      - ./motivo:/app/motivo
-      - ./webserver:/app/webserver
       - ./metamotivo-S-1-datasets:/app/metamotivo-S-1-datasets
-      - ./storage:/app/storage
     restart: unless-stopped
     deploy:
       resources:
@@ -24,13 +18,24 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
   
   vibe:
     image: yassinsiouda/cog-vibe:latest
     ports:
       - "5000:5000"
     restart: unless-stopped
-    shm_size: '16gb'  # Shared memory size
+    shm_size: '16gb'
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      # Disable GUI and use headless mode
+      - DISPLAY=:99
+      - DEBIAN_FRONTEND=noninteractive
+      - PYTHONUNBUFFERED=1
+      # Force CPU rendering for EGL
+      - LIBGL_ALWAYS_SOFTWARE=1
     deploy:
       resources:
         reservations:
@@ -38,20 +43,27 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
 
   frontend:
     image: yassinsiouda/motivo-client-front:latest
-    build:
-      context: .
-      dockerfile: Dockerfile.front
     ports:
       - "5173:5173"
-    volumes:
-      - ./src:/app/src
-      - ./public:/app/public
     depends_on:
       - backend
     env_file:
       - .env
     restart: unless-stopped
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
 
+  watchtower:
+      image: containrrr/watchtower
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+      command: --interval 30 --cleanup --remove-volumes --stop-timeout 10s
+      environment:
+        - WATCHTOWER_CLEANUP=true
+        - WATCHTOWER_STOP_TIMEOUT=10s  # Forces container stop after 10 seconds
+      restart: unless-stopped

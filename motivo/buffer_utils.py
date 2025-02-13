@@ -2,7 +2,7 @@ import h5py
 import numpy as np
 from huggingface_hub import hf_hub_download
 
-def download_buffer(model_name="metamotivo-S-1", dataset="buffer_inference_500000.hdf5"):
+def download_buffer(model_name="metamotivo-M-1", dataset="buffer_inference_500000.hdf5"):
     """Download and create a buffer for inference"""
     local_dir = f"{model_name}-datasets"
     buffer_path = hf_hub_download(

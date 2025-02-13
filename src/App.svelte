@@ -8,6 +8,7 @@
   import About from './lib/pages/About.svelte';
   import Control from './lib/pages/Control.svelte';
   import Footer from './lib/components/Footer.svelte';
+  import VersionInfo from './lib/components/VersionInfo.svelte';
   
   export let url = "";
 
@@ -20,20 +21,22 @@
   });
 </script>
 
-<div class="min-h-screen">
+<div class="flex flex-col min-h-screen">
   <Router {url}>
-    <main class="pb-16 flex flex-col bg-gray-50">
-      <Header />
-      
-      <div class="w-full px-4 flex-grow">
-        <Route path="/"><Home /></Route>
+    <Header />
+    
+    <main class="flex-1 bg-gray-50">
+      <div class="h-full">
+        <Route path="/"><Control /></Route>
+        <Route path="/testing"><Home /></Route>
         <Route path="/about"><About /></Route>
         <Route path="/live"><LiveFeed /></Route>
         <Route path="/control"><Control /></Route>
       </div>
-
-      <Footer />
     </main>
+
+    <Footer />
+   
   </Router>
 </div>
 

@@ -86,6 +86,8 @@ class Predictor(BasePredictor):
         pose_path = "/src/outputs/smpl.json"
         with open(pose_path, "r") as f:
             pose = f.read()
+            import json
+            pose = json.loads(pose)
         
         if not render_video:
             return {"pose": pose, "video": None}

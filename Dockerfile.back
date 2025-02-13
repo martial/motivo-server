@@ -19,6 +19,7 @@ RUN apt-get update && apt-get install -y \
     libxi-dev \
     libxkbcommon-dev \
     libxkbcommon-x11-dev \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Set environment variables
@@ -34,7 +35,7 @@ COPY requirements.txt .
 RUN uv pip install -r requirements.txt --system
 COPY scripts /app/scripts
 COPY webserver /app/webserver
-COPY prompt_template.txt /app/prompt_template.txt
+COPY webserver/system_instructions.txt /app/system_instructions.txt
 COPY motivo /app/motivo
 RUN mkdir -p /app/runtime
 COPY start.sh .

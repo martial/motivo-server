@@ -3,7 +3,8 @@
   import { websocketService, computingStatus } from "../services/websocketService";
   import { writable } from "svelte/store";
   import LiveFeed from "../components/LiveFeed.svelte";
-    import VibePanel from "../components/VibePanel.svelte";
+  import VibePanel from "../components/VibePanel.svelte";
+  import SmplPoseLoader from "../components/SmplPoseLoader.svelte";
 
   // Reactive stores
   const status = writable("Disconnected");
@@ -25,6 +26,9 @@
     ],
     weights: [1.0]
   };
+
+  let parsedPose = [];
+  let parsedTrans = [0, 0, 0]; // Default translation
 
   function handleMessage(data) {
     if (data.type === "debug_model_info") {
@@ -129,18 +133,10 @@
   }
 
   function testCustomPose() {
-    const socket = websocketService.getSocket();
-    if (!socket) return;
-    
     try {
-      const pose = parsePoseInput(poseInput);
+      parsedPose = parsePoseInput(poseInput);
+      mixPoseAndReward();
       poseError = ""; // Clear any previous errors
-      
-      socket.send(JSON.stringify({
-        type: "load_pose",
-        pose: pose,
-        inference_type: "goal"
-      }));
     } catch (error) {
       poseError = error.message;
     }
@@ -156,10 +152,10 @@
       poseError = ""; // Clear any previous errors
       
       socket.send(JSON.stringify({
-        type: "mix_pose_reward",
+        type: "load_pose",
         pose: pose,
-        reward: currentReward,
-        mix_weight: mixWeight
+       //reward: currentReward,
+        //mix_weight: mixWeight
       }));
     } catch (error) {
       poseError = error.message;
@@ -207,7 +203,6 @@
   <div class="grid md:grid-cols-2 gap-6">
     <!-- Left Column: Controls -->
     <div class="bg-white rounded-lg shadow-lg p-6">
-      <h1 class="text-3xl font-bold mb-6">Humanoid Control Panel</h1>
       
       <!-- Status Section -->
       <div class="mb-6 p-4 bg-gray-100 rounded-lg">
@@ -257,7 +252,7 @@
       </div>
 
       <!-- Custom Pose Section -->
-      <div class="mb-6">
+      <div class="mb-8 bg-white rounded-lg shadow p-6">
         <h2 class="text-xl font-semibold mb-4">Custom Pose</h2>
         <div class="space-y-4">
           <div>
@@ -275,10 +270,16 @@
             class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"
             disabled={$status !== "Connected"}
           >
-            Load Custom Pose
+            Parse Pose
           </button>
         </div>
       </div>
+
+    
+        <SmplPoseLoader 
+          pose={parsedPose}
+          trans={parsedTrans}
+        />
 
       <!-- New Mix Controls Section -->
       <div class="mb-6">
@@ -341,8 +342,6 @@
     <div>
       <LiveFeed />
     </div>
-    <div>
-      <VibePanel />
-    </div>
+   
   </div>
 </div> 

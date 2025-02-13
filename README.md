@@ -4,6 +4,34 @@ A real-time humanoid motion control interface built with Svelte, Flask, and Meta
 
 ## Setup
 
+
+### Server Setup
+
+inside server terminal
+
+**Check logs of specific container**
+```bash
+docker ps
+docker logs -f <container_id>
+```
+
+
+**Check logs of all containers**
+```bash
+cd motivo-prod
+docker compose -f prod.docker-compose.yaml logs 
+```
+
+**Restart all containers**
+```bash
+cd motivo-prod
+./stop_sterver.sh
+./start_server.sh
+```
+
+
+
+
 ### Python Setup
 Create and activate virtual environment:
 ```bash
@@ -143,6 +171,8 @@ xvfb-run python webserver/server.py
 sudo apt-get install libxcb-xinerama0
 export MUJOCO_GL=egl
 ```
+
+Update
 
 ## License
 
