@@ -451,57 +451,43 @@ async def handle_websocket(websocket):
                 
                 elif message_type == "load_pose_smpl":
                     try:
-                        print("\nLoading SMPL pose configuration...")
+                        print("\nProcessing SMPL pose as goal...")
                         smpl_pose = np.array(data.get("pose", []))
                         smpl_trans = np.array(data.get("trans", [0, 0, 0.91437225]))
-                        
-                        # Add target_rotation parameter
-                        target_rotation = data.get("target_rotation", None)  # Get from websocket message
-                        normalize = data.get("normalize", True)
-                        random_root = data.get("random_root", False)
-                        count_offset = data.get("count_offset", True)
-                        use_quat = data.get("use_quat", False)
-                        euler_order = data.get("euler_order", "ZYX")
                         model_type = data.get("model", "smpl")
-                        
-                        print(f"Received SMPL pose array length: {len(smpl_pose)}")
-                        print(f"Parameters: normalize={normalize}, random_root={random_root}, "
-                              f"count_offset={count_offset}, use_quat={use_quat}, "
-                              f"euler_order={euler_order}, model={model_type}")
-                        if target_rotation:
-                            print(f"Target rotation: {target_rotation}")
                         
                         if len(smpl_pose) != 72:
                             raise ValueError(f"Invalid SMPL pose length: {len(smpl_pose)}, expected 72")
                         
-                        # Convert SMPL pose to qpos with additional parameters
+                        # Convert SMPL pose to qpos for goal state
                         smpl_pose = torch.tensor(smpl_pose).reshape(1, 72)
                         smpl_trans = np.array(smpl_trans).reshape(1, 3)
-                        qpos = smpl_to_qpose(
+                        goal_qpos = smpl_to_qpose(
                             pose=smpl_pose,
                             mj_model=env.unwrapped.model,
                             trans=smpl_trans,
-                            #normalize=normalize,
-                            #random_root=random_root,
-                            #count_offset=count_offset,
-                            #use_quat=use_quat,
-                            #euler_order=euler_order,
-                            smpl_model=model_type,
-                            #target_rotation=target_rotation  # Add new parameter
+                            smpl_model=model_type
                         )
                         
-                        print("Setting physics with converted qpos...")
+                        # Store current state
+                        current_qpos = env.unwrapped.data.qpos.copy()
+                        current_qvel = env.unwrapped.data.qvel.copy()
+                        
+                        # Temporarily set goal state to get observation
                         env.unwrapped.set_physics(
-                            qpos=qpos.flatten(),  # Use converted qpos
-                            qvel=np.zeros(75)  # Use 75 zeros for qvel
+                            qpos=goal_qpos.flatten(),
+                            qvel=np.zeros(75)
                         )
-                        
-                        # Get observation and compute context
-                        print("Getting observation...")
                         goal_obs = torch.tensor(
                             env.unwrapped.get_obs()["proprio"].reshape(1, -1),
                             device=model.cfg.device,
                             dtype=torch.float32
+                        )
+                        
+                        # Restore original state
+                        env.unwrapped.set_physics(
+                            qpos=current_qpos,
+                            qvel=current_qvel
                         )
                         
                         # Use goal inference to get context
@@ -513,9 +499,7 @@ async def handle_websocket(websocket):
                         elif inference_type == "tracking":
                             z = model.tracking_inference(next_obs=goal_obs)
                         else:
-                            # If unsupported type, default to goal inference
-                            print(f"Warning: Unsupported inference type '{inference_type}', defaulting to goal inference")
-                            z = model.goal_inference(next_obs=goal_obs)
+                            raise ValueError(f"Unsupported inference type: {inference_type}")
                         
                         # Update current context
                         current_z = z
@@ -524,13 +508,13 @@ async def handle_websocket(websocket):
                         response = {
                             "type": "pose_loaded",
                             "status": "success",
+                            "inference_type": inference_type,
                             "timestamp": datetime.now().isoformat()
                         }
                         await websocket.send(json.dumps(response))
-                        print("Success response sent")
                         
                     except Exception as e:
-                        error_msg = f"Error loading SMPL pose: {str(e)}"
+                        error_msg = f"Error processing SMPL pose: {str(e)}"
                         print(error_msg)
                         traceback.print_exc()
                         
